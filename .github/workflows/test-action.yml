@@ -5,8 +5,9 @@ on:
     branches: [main]
 
 permissions:
+  actions: read             # Required by upload-sarif to query workflow run metadata
   contents: read
-  security-events: write   # Required for github/codeql-action/upload-sarif
+  security-events: write    # Required for github/codeql-action/upload-sarif
 
 jobs:
   kql-guard:
