@@ -1,0 +1,13 @@
+// Valid query with 'has' — should NOT trigger Rule 2
+SecurityEvent
+| where EventID has "4688"
+| project TimeGenerated, Computer, Account
+
+// Uses 'contains' — SHOULD trigger Rule 2 (KQL002)
+SecurityEvent
+| where ProcessName contains "mimikatz"
+| project TimeGenerated, Computer, CommandLine
+
+// Syntax error — SHOULD trigger Rule 1 (KQL001)
+SecurityEvent
+| where
