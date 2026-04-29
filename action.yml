@@ -1,0 +1,37 @@
+name: "KQL Guard"
+description: "Lint KQL detection rules for syntax errors and performance anti-patterns. Outputs SARIF v2.1.0 for GitHub Code Scanning."
+author: "kql-guard contributors"
+
+inputs:
+  path:
+    description: "File or directory to scan. Directories are searched recursively for *.kql files."
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Run kql-guard
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        BINARY="${{ github.workspace }}/bin/Release/net8.0/linux-x64/publish/kql-guard"
+        if [[ ! -x "$BINARY" ]]; then
+          echo "::error::kql-guard binary not found at $BINARY. Build it first with: dotnet publish -c Release -r linux-x64"
+          exit 1
+        fi
+
+        # Run the scan. Exit code 1 means violations were found — that's expected.
+        # We still want to produce the SARIF file so the upload step can report them.
+        "$BINARY" "${{ inputs.path }}" --format sarif > kql-guard-results.sarif || EXIT_CODE=$?
+        EXIT_CODE=${EXIT_CODE:-0}
+
+        if [[ $EXIT_CODE -eq 2 ]]; then
+          echo "::error::kql-guard encountered a usage error (exit code 2). Check the path input."
+          exit 2
+        fi
+
+        echo "kql-guard completed. Results written to kql-guard-results.sarif"
+        if [[ $EXIT_CODE -eq 1 ]]; then
+          echo "::warning::kql-guard found violations. See the SARIF output for details."
+        fi

@@ -1,0 +1,38 @@
+name: KQL Guard — Lint & Upload SARIF
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write   # Required for github/codeql-action/upload-sarif
+
+jobs:
+  kql-guard:
+    name: Scan KQL detections
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build kql-guard (NativeAOT)
+        run: dotnet publish -c Release -r linux-x64
+
+      - name: Run KQL Guard
+        uses: ./
+        with:
+          path: "."
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()   # Upload even when kql-guard finds violations (exit 1)
+        with:
+          sarif_file: kql-guard-results.sarif
+          category: kql-guard
