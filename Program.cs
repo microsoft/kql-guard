@@ -13,7 +13,7 @@ public static class Program
     {
         if (args.Length < 1 || args[0] is "-h" or "--help")
         {
-            Console.Error.WriteLine("Usage: kql-guard <path> [--format sarif] [--max-cost <int>]");
+            Console.Error.WriteLine("Usage: kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json]");
             Console.Error.WriteLine("       kql-guard fmt <path> [--write|--check]");
             Console.Error.WriteLine("  <path>          A .kql file or a directory to scan recursively.");
             Console.Error.WriteLine("  --format sarif  Emit SARIF v2.1.0 instead of text diagnostics.");
@@ -28,17 +28,22 @@ public static class Program
         }
 
         var target = args[0];
-        bool useSarif = false;
+        string format = "text";
         int? maxCost = null;
+        string? tableSizesPath = null;
 
         // Parse the remaining flags order-independently.
         for (int i = 1; i < args.Length; i++)
         {
             if (string.Equals(args[i], "--format", StringComparison.OrdinalIgnoreCase)
-                && i + 1 < args.Length
-                && string.Equals(args[i + 1], "sarif", StringComparison.OrdinalIgnoreCase))
+                && i + 1 < args.Length)
             {
-                useSarif = true;
+                format = args[i + 1].ToLowerInvariant();
+                if (format is not ("text" or "sarif" or "json"))
+                {
+                    Console.Error.WriteLine($"--format expects text|sarif|json, got: {args[i + 1]}");
+                    return 2;
+                }
                 i++;
             }
             else if (string.Equals(args[i], "--max-cost", StringComparison.OrdinalIgnoreCase)
@@ -52,6 +57,12 @@ public static class Program
                 maxCost = parsed;
                 i++;
             }
+            else if (string.Equals(args[i], "--table-sizes", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Length)
+            {
+                tableSizesPath = args[i + 1];
+                i++;
+            }
             else
             {
                 Console.Error.WriteLine($"Unrecognized argument: {args[i]}");
@@ -60,7 +71,23 @@ public static class Program
         }
 
         if (!TryResolveFiles(target, out var files)) return 2;
-        var enricher = new NullCostEnricher();
+
+        ICostEnricher enricher = new NullCostEnricher();
+        if (tableSizesPath != null)
+        {
+            try
+            {
+                var json = File.ReadAllText(tableSizesPath);
+                var factors = JsonSerializer.Deserialize(json, KqlGuardSarifContext.Default.DictionaryStringInt32)
+                    ?? new Dictionary<string, int>();
+                enricher = new TableSizeEnricher(factors);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to read --table-sizes '{tableSizesPath}': {ex.Message}");
+                return 2;
+            }
+        }
         var violations = new List<Violation>();
         var scores = new List<(string File, int Score)>();
         bool budgetBreached = false;
@@ -74,7 +101,7 @@ public static class Program
             {
                 if (v.CostWeight > 0)
                 {
-                    score += enricher.Adjust(v.RuleId, v.CostWeight, null);
+                    score += enricher.Adjust(v.RuleId, v.CostWeight, v.Table);
                 }
             }
             scores.Add((filePath, score));
@@ -85,9 +112,13 @@ public static class Program
         }
 
         // Output results.
-        if (useSarif)
+        if (format == "sarif")
         {
             WriteSarif(violations, scores);
+        }
+        else if (format == "json")
+        {
+            WriteJson(violations, scores);
         }
         else
         {
@@ -150,7 +181,7 @@ public static class Program
         // errors — the same query that won't compile is still worth costing.
         violations.AddRange(CostAnalyzer.Analyze(code, filePath));
 
-        return violations;
+        return Suppressions.Filter(violations, text);
     }
 
     private static void WriteSarif(List<Violation> violations, List<(string File, int Score)> scores)
@@ -215,6 +246,19 @@ public static class Program
         Console.WriteLine(JsonSerializer.Serialize(log, KqlGuardSarifContext.Default.SarifLog));
     }
 
+    private static void WriteJson(List<Violation> violations, List<(string File, int Score)> scores)
+    {
+        var findings = new List<JsonFinding>();
+        foreach (var v in violations)
+        {
+            findings.Add(new JsonFinding(v.File, v.Line, v.Column, v.Severity, v.RuleId, v.Message, v.CostWeight));
+        }
+        var costScores = new Dictionary<string, int>();
+        foreach (var (file, score) in scores) costScores[file] = score;
+        var report = new JsonReport(findings, costScores);
+        Console.WriteLine(JsonSerializer.Serialize(report, KqlGuardSarifContext.Default.JsonReport));
+    }
+
     internal static void GetLineAndColumn(KustoCode code, int position, out int line, out int column)
     {
         if (!code.TryGetLineAndOffset(position, out line, out column))
@@ -232,4 +276,5 @@ public readonly record struct Violation(
     string Severity,
     string RuleId,
     string Message,
-    int CostWeight = 0);
+    int CostWeight = 0,
+    string? Table = null);

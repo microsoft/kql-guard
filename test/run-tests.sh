@@ -39,6 +39,8 @@ assert_contains "KQL005 union"         "KQL005" "$(RUN $S/union-star.kql)"
 assert_contains "KQL006 join"          "KQL006" "$(RUN $S/unwindowed-join.kql)"
 assert_contains "KQL007 regex"         "KQL007" "$(RUN $S/regex.kql)"
 assert_contains "KQL008 no-reduction"  "KQL008" "$(RUN $S/no-reduction.kql)"
+assert_contains "KQL009 mv-expand"     "KQL009" "$(RUN $S/unbounded-mvexpand.kql)"
+assert_contains "KQL010 cross-cluster" "KQL010" "$(RUN $S/cross-cluster.kql)"
 
 # Clean query: no findings, score 0.
 clean=$(RUN $S/clean.kql)
@@ -67,6 +69,11 @@ assert "costScores" in r["properties"], r["properties"]
 print("ok: SARIF valid with KQL003-008 + costScores")
 PY
 then :; else fails=$((fails+1)); fi
+
+# Offline enrichment: per-table size factor scales scan weights (5 * 10 = 50).
+sizes=$(mktemp --suffix=.json); echo '{"SecurityEvent":10}' > "$sizes"
+assert_contains "enrich scales score" "cost score 50" "$(RUN $S/no-timefilter.kql --table-sizes "$sizes")"
+rm -f "$sizes"
 
 # Formatter: --check flags unformatted, --write fixes, then idempotent.
 tmp=$(mktemp --suffix=.kql)

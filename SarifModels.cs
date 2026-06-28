@@ -74,4 +74,20 @@ public sealed record SarifRegion(
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     WriteIndented = true)]
 [JsonSerializable(typeof(SarifLog))]
+[JsonSerializable(typeof(JsonReport))]
+[JsonSerializable(typeof(Dictionary<string, int>))]
 internal partial class KqlGuardSarifContext : JsonSerializerContext;
+
+// kql-guard's own machine-readable report (--format json).
+public sealed record JsonReport(
+    List<JsonFinding> Findings,
+    Dictionary<string, int> CostScores);
+
+public sealed record JsonFinding(
+    string File,
+    int Line,
+    int Column,
+    string Severity,
+    string Rule,
+    string Message,
+    int CostWeight);

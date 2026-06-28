@@ -41,6 +41,10 @@ public static class Rules
             "Regex operations (matches regex / extract / parse kind=regex) are CPU-heavy; prefer 'has'/parse simple where possible.", "warning", 2),
         new("KQL008", "NoColumnOrRowReduction",
             "Query returns table rows with no project/summarize/take; it keeps every column and row in memory.", "warning", 1),
+        new("KQL009", "UnboundedMvExpand",
+            "'mv-expand' with no 'limit' can explode row counts; add 'limit N' to cap fan-out.", "warning", 3),
+        new("KQL010", "CrossClusterQuery",
+            "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -66,6 +70,32 @@ public interface ICostEnricher
 public sealed class NullCostEnricher : ICostEnricher
 {
     public int Adjust(string ruleId, int staticWeight, string? tableName) => staticWeight;
+}
+
+/// <summary>
+/// Offline enrichment: scales scan-related weights (KQL003/KQL008) by a per-table
+/// multiplier loaded from a JSON map {"TableName": factor}. A full-table scan on a
+/// 100x table costs ~100x more, so a config file is enough to sharpen the score
+/// without any network call. This is the lazy stand-in for live table sizing —
+/// the live API enricher would implement the same interface, no pipeline change.
+/// ponytail: file-based factors; swap for a live ADX/.show table details lookup
+/// behind this same interface when real numbers matter.
+/// </summary>
+public sealed class TableSizeEnricher : ICostEnricher
+{
+    private readonly Dictionary<string, int> _factors;
+
+    public TableSizeEnricher(Dictionary<string, int> factors) => _factors = factors;
+
+    public int Adjust(string ruleId, int staticWeight, string? tableName)
+    {
+        if (tableName != null && (ruleId == "KQL003" || ruleId == "KQL008")
+            && _factors.TryGetValue(tableName, out var factor) && factor > 1)
+        {
+            return staticWeight * factor;
+        }
+        return staticWeight;
+    }
 }
 
 /// <summary>
@@ -155,6 +185,30 @@ public static class CostAnalyzer
             }
         }
 
+        // KQL009: mv-expand without a row limit.
+        foreach (var mv in root.GetDescendants<MvExpandOperator>())
+        {
+            // ponytail: text-scan for 'limit' — covers both 'mv-expand limit N' and a
+            // following '| limit'. Upgrade to RowLimitClause inspection if noisy.
+            if (!mv.ToString().Contains("limit", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add(Make(code, filePath, mv.TextStart, "KQL009",
+                    "Unbounded 'mv-expand'; add 'limit N' to cap row explosion."));
+            }
+        }
+
+        // KQL010: cross-cluster/database references.
+        foreach (var call in root.GetDescendants<FunctionCallExpression>())
+        {
+            var fn = call.Name.SimpleName;
+            if (fn.Equals("cluster", StringComparison.OrdinalIgnoreCase)
+                || fn.Equals("database", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add(Make(code, filePath, call.TextStart, "KQL010",
+                    $"'{fn}()' references another cluster/database; network egress adds latency and cost."));
+            }
+        }
+
         // --- Statement-level heuristics (KQL003, KQL006, KQL008) ---
         foreach (var stmt in root.GetDescendants<ExpressionStatement>())
         {
@@ -173,11 +227,12 @@ public static class CostAnalyzer
             // for KQL003/KQL008. search/union/print have their own rules / are not
             // table scans.
             bool readsTable = source is NameReference;
+            string? tableName = (source as NameReference)?.SimpleName;
 
             if (readsTable && !hasTimeBound)
             {
                 violations.Add(Make(code, filePath, source.TextStart, "KQL003",
-                    "No time filter; add e.g. '| where TimeGenerated > ago(1d)' to avoid a full-table scan."));
+                    "No time filter; add e.g. '| where TimeGenerated > ago(1d)' to avoid a full-table scan.", tableName));
             }
 
             // KQL006: a join with no time window anywhere in the statement.
@@ -200,7 +255,7 @@ public static class CostAnalyzer
                 if (!hasReducer)
                 {
                     violations.Add(Make(code, filePath, source.TextStart, "KQL008",
-                        "No project/summarize/take; reduce columns and rows early to cut memory and cost."));
+                        "No project/summarize/take; reduce columns and rows early to cut memory and cost.", tableName));
                 }
             }
         }
@@ -217,10 +272,10 @@ public static class CostAnalyzer
         return expr;
     }
 
-    private static Violation Make(KustoCode code, string filePath, int position, string ruleId, string message)
+    private static Violation Make(KustoCode code, string filePath, int position, string ruleId, string message, string? table = null)
     {
         Program.GetLineAndColumn(code, position, out var line, out var col);
         var info = Rules.All.First(r => r.Id == ruleId);
-        return new Violation(filePath, line, col, info.DefaultLevel, ruleId, message, info.CostWeight);
+        return new Violation(filePath, line, col, info.DefaultLevel, ruleId, message, info.CostWeight, table);
     }
 }
