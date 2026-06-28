@@ -14,10 +14,17 @@ public static class Program
         if (args.Length < 1 || args[0] is "-h" or "--help")
         {
             Console.Error.WriteLine("Usage: kql-guard <path> [--format sarif] [--max-cost <int>]");
+            Console.Error.WriteLine("       kql-guard fmt <path> [--write|--check]");
             Console.Error.WriteLine("  <path>          A .kql file or a directory to scan recursively.");
             Console.Error.WriteLine("  --format sarif  Emit SARIF v2.1.0 instead of text diagnostics.");
             Console.Error.WriteLine("  --max-cost <n>  Fail (exit 1) if any file's cost score exceeds n.");
+            Console.Error.WriteLine("  fmt             Format KQL; --write rewrites files, --check gates CI.");
             return args.Length < 1 ? 2 : 0;
+        }
+
+        if (args[0] == "fmt")
+        {
+            return Formatter.Run(args);
         }
 
         var target = args[0];
@@ -52,29 +59,7 @@ public static class Program
             }
         }
 
-        // Resolve the list of .kql files from the positional argument.
-        string[] files;
-        if (File.Exists(target))
-        {
-            files = new[] { target };
-        }
-        else if (Directory.Exists(target))
-        {
-            files = Directory.GetFiles(target, "*.kql", SearchOption.AllDirectories);
-            Array.Sort(files, StringComparer.Ordinal);
-            if (files.Length == 0)
-            {
-                Console.Error.WriteLine($"No .kql files found under: {target}");
-                return 0;
-            }
-        }
-        else
-        {
-            Console.Error.WriteLine($"Path not found: {target}");
-            return 2;
-        }
-
-        // Analyze every file, aggregate violations, and compute per-file cost scores.
+        if (!TryResolveFiles(target, out var files)) return 2;
         var enricher = new NullCostEnricher();
         var violations = new List<Violation>();
         var scores = new List<(string File, int Score)>();
@@ -121,6 +106,29 @@ public static class Program
         }
 
         return (violations.Count > 0 || budgetBreached) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// Resolves a path argument to a sorted list of .kql files. Returns false
+    /// (and prints an error) on a missing path. An empty directory yields an
+    /// empty list with a true result — nothing to do is not a usage error.
+    /// </summary>
+    public static bool TryResolveFiles(string target, out string[] files)
+    {
+        if (File.Exists(target))
+        {
+            files = new[] { target };
+            return true;
+        }
+        if (Directory.Exists(target))
+        {
+            files = Directory.GetFiles(target, "*.kql", SearchOption.AllDirectories);
+            Array.Sort(files, StringComparer.Ordinal);
+            return true;
+        }
+        Console.Error.WriteLine($"Path not found: {target}");
+        files = Array.Empty<string>();
+        return false;
     }
 
     private static List<Violation> AnalyzeFile(string filePath)

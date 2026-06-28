@@ -57,6 +57,17 @@ their weights are all defined in one place (`Rules.All` in
 skipped for files that have syntax errors (the AST is unreliable until those
 are fixed).
 
+## Formatter
+
+Deterministic, idempotent KQL formatting (gofmt/Prettier-style), delegating to
+the official `Kusto.Language` formatter — canonical one-pipe-per-line layout.
+
+```bash
+kql-guard fmt <path>            # print formatted KQL to stdout
+kql-guard fmt <path> --write    # rewrite files in place
+kql-guard fmt <path> --check    # exit 1 if any file isn't formatted (CI gate)
+```
+
 ## GitHub Action
 
 ```yaml
@@ -80,5 +91,4 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
 - **Live-API cost enrichment** — an opt-in step that adjusts weights using real
   table sizes / ingestion volume. The seam (`ICostEnricher`) already exists; the
   default is a no-op so the core stays fully offline.
-- **Deterministic formatter** — `gofmt`/`Prettier`-style canonical KQL.
 - **Distribution via `super-linter`**.

@@ -26,6 +26,9 @@ jobs:
       - name: Run rule self-check
         run: ./test/run-tests.sh
 
+      - name: Check KQL formatting
+        run: dotnet bin/Debug/net8.0/kql-guard.dll fmt samples/cost --check
+
       - name: Build kql-guard (NativeAOT)
         run: dotnet publish -c Release -r linux-x64
 

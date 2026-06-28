@@ -68,5 +68,14 @@ print("ok: SARIF valid with KQL003-008 + costScores")
 PY
 then :; else fails=$((fails+1)); fi
 
+# Formatter: --check flags unformatted, --write fixes, then idempotent.
+tmp=$(mktemp --suffix=.kql)
+printf 'SecurityEvent|where EventID==4688|project   x,y|take 5\n' > "$tmp"
+RUN fmt "$tmp" --check >/dev/null; assert_exit "fmt --check unformatted" 1 $?
+RUN fmt "$tmp" --write >/dev/null; assert_exit "fmt --write" 0 $?
+RUN fmt "$tmp" --check >/dev/null; assert_exit "fmt --check after write" 0 $?
+assert_contains "fmt pipe-per-line" "| where EventID == 4688" "$(cat "$tmp")"
+rm -f "$tmp"
+
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi
