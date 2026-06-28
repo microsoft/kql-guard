@@ -47,6 +47,10 @@ public static class Rules
             "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
         new("KQL011", "UnboundedSort",
             "'sort'/'order by' with no following 'take'/'top' materializes and sorts the whole result; cap it with 'take N' or use 'top N'.", "warning", 2),
+        new("KQL012", "CaseFoldEquality",
+            "tolower()/toupper() around an equality defeats the index; use the case-insensitive '=~' operator instead.", "warning", 2),
+        new("KQL013", "NonDeterministicTake",
+            "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order so results are reproducible.", "warning", 1),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -218,6 +222,32 @@ public static class CostAnalyzer
             {
                 violations.Add(Make(code, filePath, sort.TextStart, "KQL011",
                     "Unbounded 'sort'; add 'take N' or use 'top N by ...' to avoid sorting the full result."));
+            }
+        }
+
+        // KQL012: tolower()/toupper() around an equality — defeats the index.
+        foreach (var eq in root.GetDescendants<BinaryExpression>())
+        {
+            if (eq.Kind != SyntaxKind.EqualExpression && eq.Kind != SyntaxKind.NotEqualExpression) continue;
+            foreach (var call in eq.GetDescendants<FunctionCallExpression>())
+            {
+                var fn = call.Name.SimpleName;
+                if (fn.Equals("tolower", StringComparison.OrdinalIgnoreCase) || fn.Equals("toupper", StringComparison.OrdinalIgnoreCase))
+                {
+                    violations.Add(Make(code, filePath, eq.TextStart, "KQL012",
+                        $"'{fn}()' before '==' defeats the index; use case-insensitive '=~' instead."));
+                    break;
+                }
+            }
+        }
+
+        // KQL013: take/limit with no ordering — arbitrary, non-reproducible rows.
+        if (root.GetDescendants<SortOperator>().Count == 0 && root.GetDescendants<TopOperator>().Count == 0)
+        {
+            foreach (var take in root.GetDescendants<TakeOperator>())
+            {
+                violations.Add(Make(code, filePath, take.TextStart, "KQL013",
+                    "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order to make results reproducible."));
             }
         }
 

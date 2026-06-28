@@ -42,6 +42,8 @@ assert_contains "KQL008 no-reduction"  "KQL008" "$(RUN $S/no-reduction.kql)"
 assert_contains "KQL009 mv-expand"     "KQL009" "$(RUN $S/unbounded-mvexpand.kql)"
 assert_contains "KQL010 cross-cluster" "KQL010" "$(RUN $S/cross-cluster.kql)"
 assert_contains "KQL011 sort"          "KQL011" "$(RUN $S/unbounded-sort.kql)"
+assert_contains "KQL012 casefold"      "KQL012" "$(RUN $S/casefold-take.kql)"
+assert_contains "KQL013 take-nosort"   "KQL013" "$(RUN $S/casefold-take.kql)"
 
 # Clean query: no findings, score 0.
 clean=$(RUN $S/clean.kql)

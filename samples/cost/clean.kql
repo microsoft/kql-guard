@@ -3,4 +3,4 @@ SecurityEvent
 | where TimeGenerated > ago(1d)
 | where EventID == 4688
 | project TimeGenerated, Computer, Account
-| take 100
+| top 100 by TimeGenerated desc

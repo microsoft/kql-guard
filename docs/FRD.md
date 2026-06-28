@@ -15,7 +15,7 @@ kql-guard fmt <path> [--write|--check]
 | ID | Requirement |
 |----|-------------|
 | FR-1 | Parse each file offline via `Kusto.Language`; report parser errors as KQL001. |
-| FR-2 | Detect anti-patterns KQL002–KQL011 via AST traversal (Visitor/`GetDescendants`). |
+| FR-2 | Detect anti-patterns KQL002–KQL013 via AST traversal (Visitor/`GetDescendants`). |
 | FR-3 | Each finding has a relative cost weight; file score = sum of weights (errors excluded). |
 | FR-4 | `--max-cost n` exits 1 when any file's score > n. |
 | FR-5 | `--format sarif` emits SARIF v2.1.0 with rule metadata and per-file cost scores. |
@@ -42,6 +42,8 @@ kql-guard fmt <path> [--write|--check]
 | KQL009 | Unbounded `mv-expand` | 3 |
 | KQL010 | Cross-cluster `cluster()`/`database()` | 2 |
 | KQL011 | Unbounded sort (no take/top) | 2 |
+| KQL012 | tolower/toupper before == (use =~) | 2 |
+| KQL013 | take/limit without sort/top | 1 |
 
 ## 4. Distribution
 

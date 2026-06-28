@@ -1,0 +1,4 @@
+SecurityEvent
+| where TimeGenerated>ago(1d)
+| where tolower(Account)=="admin"
+| take 10

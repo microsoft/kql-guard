@@ -59,12 +59,19 @@ offline.
 | KQL009 | **Unbounded `mv-expand`** — no `limit`, can explode row counts | 3 |
 | KQL010 | **Cross-cluster** `cluster()`/`database()` — network egress, latency | 2 |
 | KQL011 | **Unbounded `sort`/`order by`** — full sort, no `take`/`top` | 2 |
+| KQL012 | **Case-fold equality** `tolower()==` — defeats index; use `=~` | 2 |
+| KQL013 | **Non-deterministic `take`** — no `sort`/`top` | 1 |
 
 KQL003, KQL006 and KQL008 are heuristics and may occasionally over-report;
 their weights are all defined in one place (`Rules.All` in
 [`CostRules.cs`](CostRules.cs)) so they can be tuned in one edit. Cost rules are
 skipped for files that have syntax errors (the AST is unreliable until those
 are fixed).
+
+> Rule priorities are validated against real usage: over a 7-day window of
+> ~425K Kusto queries, ~72% lacked a time filter (KQL003), 18% had unbounded
+> sorts (KQL011), 15% mv-expand/cross-cluster (KQL009/010), and ~2K used
+> index-defeating `tolower()==` (KQL012).
 
 ## Formatter
 
