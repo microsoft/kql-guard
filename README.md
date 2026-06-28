@@ -14,15 +14,17 @@ a costly query is ever merged.
 ## Usage
 
 ```bash
-kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json]
+kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json] [--baseline file] [--write-baseline]
 ```
 
 | Argument | Description |
 |----------|-------------|
-| `<path>` | A `.kql` file or a directory scanned recursively for `*.kql`. |
+| `<path>` | A `.kql`/`.yaml`/`.yml` file or a directory scanned recursively. Sentinel `.yaml` rules: the embedded `query:` is linted in place. |
 | `--format text\|sarif\|json` | Output as text diagnostics (default), SARIF v2.1.0, or JSON. |
 | `--max-cost <n>` | Fail (exit `1`) if any file's cost score exceeds `n`. |
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
+| `--baseline <file>` | Suppress findings recorded in the baseline; fail only on new ones. |
+| `--write-baseline` | Record current findings to the baseline and exit 0. |
 
 Exit codes: `0` clean · `1` findings or budget breach · `2` usage error.
 

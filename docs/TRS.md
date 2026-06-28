@@ -14,6 +14,7 @@
 | `Program.cs` | Arg parsing, file resolution, scoring, text/SARIF/JSON output, dispatch. |
 | `CostRules.cs` | `Rules.All` registry, `ICostEnricher`/`NullCostEnricher`/`TableSizeEnricher`, `CostAnalyzer`. |
 | `Suppressions.cs` | Line-scan suppression directives, filter findings. |
+| `QueryExtraction.cs` | Lift KQL from `.kql` directly or from a Sentinel `.yaml` `query:` block, with line offset. |
 | `Formatter.cs` | `fmt` via `KustoCodeService.GetFormattedText` (pipe-per-line, idempotent). |
 | `SarifModels.cs` | SARIF v2.1.0 + JSON DTOs, source-gen `JsonSerializerContext` (AOT-safe). |
 | `action.yml`, `Dockerfile` | GitHub Action + container distribution. |

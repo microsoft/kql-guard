@@ -38,6 +38,8 @@ runtime required at execution time.
 5. Output: text, SARIF v2.1.0, JSON.
 6. Inline suppressions: `// kql-guard:disable[-next-line|-file]`.
 7. Distribution: composite GitHub Action, Docker image, super-linter path.
+8. Sentinel `.yaml` detection rules: lint the embedded query in place.
+9. Baseline: ratchet on existing repos — fail only on newly introduced findings.
 
 ## 6. Success metrics
 

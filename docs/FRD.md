@@ -24,6 +24,8 @@ kql-guard fmt <path> [--write|--check]
 | FR-8 | Inline comments suppress findings per line / next line / whole file, optionally by rule id. |
 | FR-9 | `fmt` formats KQL deterministically and idempotently; `--check` exits 1 if unformatted. |
 | FR-10 | Cost rules are skipped for files with syntax errors (unreliable AST). |
+| FR-11 | Sentinel `.yaml`/`.yml` rules: extract the embedded `query:` block and lint it, mapping findings to the YAML's own line numbers. |
+| FR-12 | `--write-baseline` records findings; `--baseline` suppresses recorded ones (rule+file+message), failing only on new. |
 
 ## 3. Rule catalog
 

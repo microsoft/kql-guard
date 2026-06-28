@@ -75,6 +75,15 @@ sizes=$(mktemp --suffix=.json); echo '{"SecurityEvent":10}' > "$sizes"
 assert_contains "enrich scales score" "cost score 50" "$(RUN $S/no-timefilter.kql --table-sizes "$sizes")"
 rm -f "$sizes"
 
+# Sentinel YAML: extract embedded query and map findings to the YAML's own rows.
+assert_contains "yaml KQL002 line 6" "sentinel-rule.yaml(6," "$(RUN samples/sentinel-rule.yaml)"
+
+# Baseline: record current findings, then a clean rescan reports none.
+bl=$(mktemp); RUN $S/unwindowed-join.kql --write-baseline --baseline "$bl" >/dev/null
+out=$(RUN $S/unwindowed-join.kql --baseline "$bl")
+if [[ "$out" == *"KQL"* ]]; then echo "FAIL: baseline didn't suppress"; fails=$((fails+1)); else echo "ok: baseline suppresses known"; fi
+rm -f "$bl"
+
 # Formatter: --check flags unformatted, --write fixes, then idempotent.
 tmp=$(mktemp --suffix=.kql)
 printf 'SecurityEvent|where EventID==4688|project   x,y|take 5\n' > "$tmp"

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Kusto.Language;
 using Kusto.Language.Syntax;
@@ -31,6 +32,8 @@ public static class Program
         string format = "text";
         int? maxCost = null;
         string? tableSizesPath = null;
+        string? baselinePath = null;
+        bool writeBaseline = false;
 
         // Parse the remaining flags order-independently.
         for (int i = 1; i < args.Length; i++)
@@ -62,6 +65,16 @@ public static class Program
             {
                 tableSizesPath = args[i + 1];
                 i++;
+            }
+            else if (string.Equals(args[i], "--baseline", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Length)
+            {
+                baselinePath = args[i + 1];
+                i++;
+            }
+            else if (string.Equals(args[i], "--write-baseline", StringComparison.OrdinalIgnoreCase))
+            {
+                writeBaseline = true;
             }
             else
             {
@@ -111,6 +124,22 @@ public static class Program
             }
         }
 
+        // Baseline: a finding's signature is rule+file+message (line-agnostic, so
+        // edits above it don't churn the baseline). --write-baseline records all
+        // current findings and passes; --baseline drops known ones, failing only on new.
+        if (writeBaseline)
+        {
+            File.WriteAllLines(baselinePath ?? ".kql-guard-baseline",
+                violations.Select(BaselineSig).Distinct().OrderBy(s => s, StringComparer.Ordinal));
+            Console.Error.WriteLine($"Baseline written: {violations.Count} findings.");
+            return 0;
+        }
+        if (baselinePath != null && File.Exists(baselinePath))
+        {
+            var known = new HashSet<string>(File.ReadAllLines(baselinePath));
+            violations = violations.Where(v => !known.Contains(BaselineSig(v))).ToList();
+        }
+
         // Output results.
         if (format == "sarif")
         {
@@ -153,7 +182,10 @@ public static class Program
         }
         if (Directory.Exists(target))
         {
-            files = Directory.GetFiles(target, "*.kql", SearchOption.AllDirectories);
+            files = Directory.GetFiles(target, "*.kql", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(target, "*.yaml", SearchOption.AllDirectories))
+                .Concat(Directory.GetFiles(target, "*.yml", SearchOption.AllDirectories))
+                .ToArray();
             Array.Sort(files, StringComparer.Ordinal);
             return true;
         }
@@ -162,10 +194,14 @@ public static class Program
         return false;
     }
 
+    private static string BaselineSig(Violation v) => $"{v.RuleId}\t{v.File}\t{v.Message}";
+
     private static List<Violation> AnalyzeFile(string filePath)
     {
         var violations = new List<Violation>();
-        var text = File.ReadAllText(filePath);
+        var raw = File.ReadAllText(filePath);
+        var (text, lineOffset) = QueryExtraction.Extract(filePath, raw);
+        if (text.Length == 0) return violations;   // yaml with no query block
         var code = KustoCode.Parse(text);
 
         // Rule KQL001: syntax validation — built-in diagnostics from the parser.
@@ -181,7 +217,10 @@ public static class Program
         // errors — the same query that won't compile is still worth costing.
         violations.AddRange(CostAnalyzer.Analyze(code, filePath));
 
-        return Suppressions.Filter(violations, text);
+        if (lineOffset > 0)
+            violations = violations.Select(v => v with { Line = v.Line + lineOffset }).ToList();
+
+        return Suppressions.Filter(violations, raw);
     }
 
     private static void WriteSarif(List<Violation> violations, List<(string File, int Score)> scores)
