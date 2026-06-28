@@ -14,16 +14,20 @@ a costly query is ever merged.
 ## Usage
 
 ```bash
-kql-guard <path> [--format sarif] [--max-cost <int>]
+kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json]
 ```
 
 | Argument | Description |
 |----------|-------------|
 | `<path>` | A `.kql` file or a directory scanned recursively for `*.kql`. |
-| `--format sarif` | Emit SARIF v2.1.0 instead of text diagnostics. |
+| `--format text\|sarif\|json` | Output as text diagnostics (default), SARIF v2.1.0, or JSON. |
 | `--max-cost <n>` | Fail (exit `1`) if any file's cost score exceeds `n`. |
+| `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
 
 Exit codes: `0` clean · `1` findings or budget breach · `2` usage error.
+
+**Suppress** a finding with an inline comment: `// kql-guard:disable KQL003`,
+`// kql-guard:disable-next-line` or `// kql-guard:disable-file`.
 
 ### Example
 
@@ -50,6 +54,8 @@ offline.
 | KQL006 | **Unwindowed `join`** — no time filter before joining | 3 |
 | KQL007 | **Regex-heavy** (`matches regex`, `extract`/`extract_all`, `parse kind=regex`) | 2 |
 | KQL008 | **No reduction** (no `project`/`summarize`/`take`) — keeps all columns/rows | 1 |
+| KQL009 | **Unbounded `mv-expand`** — no `limit`, can explode row counts | 3 |
+| KQL010 | **Cross-cluster** `cluster()`/`database()` — network egress, latency | 2 |
 
 KQL003, KQL006 and KQL008 are heuristics and may occasionally over-report;
 their weights are all defined in one place (`Rules.All` in
@@ -79,6 +85,19 @@ kql-guard fmt <path> --check    # exit 1 if any file isn't formatted (CI gate)
 The composite action runs the scan and produces `kql-guard-results.sarif` for
 `github/codeql-action/upload-sarif`. See [`action.yml`](action.yml).
 
+## Container & super-linter
+
+A self-contained image ships only the NativeAOT binary:
+
+```bash
+docker build -t kql-guard .
+docker run --rm -v "$PWD:/work" kql-guard /work/detections
+```
+
+The same binary layers into [`super-linter`](https://github.com/super-linter/super-linter):
+copy `/usr/local/bin/kql-guard` into the super-linter image and register `*.kql`
+as a custom linter step — no .NET runtime required.
+
 ## Build & test
 
 ```bash
@@ -88,7 +107,7 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
 
 ## Roadmap
 
-- **Live-API cost enrichment** — an opt-in step that adjusts weights using real
-  table sizes / ingestion volume. The seam (`ICostEnricher`) already exists; the
-  default is a no-op so the core stays fully offline.
-- **Distribution via `super-linter`**.
+- **Live-API cost enrichment** — `--table-sizes` already scales weights from a
+  static map; a future opt-in step fetches real sizes via the `ICostEnricher`
+  seam, keeping the default fully offline.
+- **Upstream into `super-linter`** for out-of-the-box KQL validation.
