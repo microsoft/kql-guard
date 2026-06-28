@@ -31,7 +31,7 @@ runtime required at execution time.
 
 ## 5. Features (delivered)
 
-1. Static analysis: syntax errors + performance/cost anti-patterns (KQL001–010).
+1. Static analysis: syntax errors + performance/cost anti-patterns (KQL001–011).
 2. FinOps cost profiler: per-finding weights, per-file score, `--max-cost` gate.
 3. Offline enrichment: `--table-sizes` scales scan-rule weights per table.
 4. Deterministic formatter (`fmt`): check / write, idempotent.
