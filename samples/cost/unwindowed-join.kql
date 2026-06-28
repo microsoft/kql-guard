@@ -1,0 +1,4 @@
+// KQL006: unwindowed join
+SigninLogs
+| join (AuditLogs) on CorrelationId
+| project CorrelationId

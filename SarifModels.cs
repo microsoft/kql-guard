@@ -15,7 +15,11 @@ public sealed record SarifLog(
 public sealed record SarifRun(
     SarifTool Tool,
     List<SarifResult> Results,
-    string? ColumnKind = null);
+    string? ColumnKind = null,
+    SarifRunProperties? Properties = null);
+
+public sealed record SarifRunProperties(
+    [property: JsonPropertyName("costScores")] Dictionary<string, int> CostScores);
 
 public sealed record SarifTool(
     SarifToolComponent Driver);

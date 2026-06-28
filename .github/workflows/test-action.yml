@@ -23,6 +23,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Run rule self-check
+        run: ./test/run-tests.sh
+
       - name: Build kql-guard (NativeAOT)
         run: dotnet publish -c Release -r linux-x64
 

@@ -1,0 +1,4 @@
+// KQL003: no time filter
+SecurityEvent
+| where EventID == 4688
+| project TimeGenerated, Computer

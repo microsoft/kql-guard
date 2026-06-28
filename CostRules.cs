@@ -1,0 +1,226 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Kusto.Language;
+using Kusto.Language.Syntax;
+
+namespace KqlGuard;
+
+/// <summary>
+/// Central registry of every diagnostic rule: id, SARIF metadata, default
+/// severity, and FinOps cost weight. This single table is the calibration
+/// knob — tune a heuristic's noise by changing one number here, nowhere else.
+/// </summary>
+public sealed record RuleInfo(
+    string Id,
+    string Name,
+    string ShortDescription,
+    string DefaultLevel,
+    int CostWeight);
+
+public static class Rules
+{
+    // ponytail: weights are relative and unitless on purpose. No dollar figures
+    // are possible offline; a fabricated "$" would mislead. Live-table sizing,
+    // if ever needed, arrives via ICostEnricher — not by faking a number here.
+    public static readonly IReadOnlyList<RuleInfo> All = new List<RuleInfo>
+    {
+        new("KQL001", "SyntaxError",
+            "KQL syntax error detected by the parser.", "error", 0),
+        new("KQL002", "AvoidContainsOperator",
+            "The 'contains' operator performs a full-text scan; prefer 'has' for whole-term matching.", "warning", 1),
+        new("KQL003", "MissingTimeFilter",
+            "Table query has no time-range filter (ago()/between); it scans the full table — a top cost driver.", "warning", 5),
+        new("KQL004", "UnscopedSearch",
+            "'search' with no table scope queries every table; scope it with 'search in (Table)' or use a table reference.", "warning", 5),
+        new("KQL005", "WildcardUnion",
+            "'union' over a wildcard table set fans out across many tables; list the tables explicitly.", "warning", 4),
+        new("KQL006", "UnwindowedJoin",
+            "'join' with no time-range filter materializes full tables; add a time window before joining.", "warning", 3),
+        new("KQL007", "RegexHeavyOperation",
+            "Regex operations (matches regex / extract / parse kind=regex) are CPU-heavy; prefer 'has'/parse simple where possible.", "warning", 2),
+        new("KQL008", "NoColumnOrRowReduction",
+            "Query returns table rows with no project/summarize/take; it keeps every column and row in memory.", "warning", 1),
+    };
+
+    private static readonly Dictionary<string, int> Index =
+        All.Select((r, i) => (r.Id, i)).ToDictionary(x => x.Id, x => x.i);
+
+    public static int Weight(string ruleId) =>
+        All.First(r => r.Id == ruleId).CostWeight;
+
+    public static int IndexOf(string ruleId) => Index[ruleId];
+}
+
+/// <summary>
+/// Seam for future live-API cost enrichment (e.g. real table sizes from ADX
+/// or Log Analytics). The default is a no-op; this change performs NO network
+/// call, auth, or DB connection. A later change supplies a real implementation
+/// without touching the scoring pipeline.
+/// </summary>
+public interface ICostEnricher
+{
+    int Adjust(string ruleId, int staticWeight, string? tableName);
+}
+
+public sealed class NullCostEnricher : ICostEnricher
+{
+    public int Adjust(string ruleId, int staticWeight, string? tableName) => staticWeight;
+}
+
+/// <summary>
+/// Static, offline FinOps cost profiler. Walks the parsed AST and flags
+/// high-cost query shapes (KQL002–KQL008), each carrying a relative cost weight.
+/// </summary>
+public static class CostAnalyzer
+{
+    private static readonly HashSet<string> RegexFunctions =
+        new(StringComparer.OrdinalIgnoreCase) { "extract", "extract_all" };
+
+    // Operators that reduce columns or rows, so a query containing one is not
+    // a "scan everything" query for KQL008 purposes.
+    private static readonly HashSet<string> ReducerOperators = new(StringComparer.Ordinal)
+    {
+        "ProjectOperator", "ProjectAwayOperator", "ProjectKeepOperator",
+        "ProjectRenameOperator", "ProjectReorderOperator",
+        "SummarizeOperator", "TakeOperator", "DistinctOperator",
+        "TopOperator", "TopNestedOperator", "TopHittersOperator",
+        "CountOperator", "SampleOperator", "SampleDistinctOperator",
+        "GetSchemaOperator", "FacetOperator",
+    };
+
+    public static List<Violation> Analyze(KustoCode code, string filePath)
+    {
+        var violations = new List<Violation>();
+        var root = code.Syntax;
+
+        // --- Node-local rules (KQL002, KQL004, KQL005, KQL006, KQL007) ---
+
+        // KQL002: contains / contains_cs.
+        foreach (var bin in root.GetDescendants<BinaryExpression>())
+        {
+            if (bin.Kind == SyntaxKind.ContainsExpression || bin.Kind == SyntaxKind.ContainsCsExpression)
+            {
+                var suggested = bin.Kind == SyntaxKind.ContainsCsExpression ? "has_cs" : "has";
+                violations.Add(Make(code, filePath, bin.Operator.TextStart, "KQL002",
+                    $"Avoid '{bin.Operator.Text}'; prefer '{suggested}' for whole-term matching (better performance)."));
+            }
+        }
+
+        // KQL004: search with no table scope.
+        foreach (var search in root.GetDescendants<SearchOperator>())
+        {
+            if (search.InClause == null)
+            {
+                violations.Add(Make(code, filePath, search.SearchKeyword.TextStart, "KQL004",
+                    "Unscoped 'search' queries every table; scope it with 'search in (Table1, Table2) ...' or filter a specific table."));
+            }
+        }
+
+        // KQL005: union over a wildcard table set.
+        foreach (var union in root.GetDescendants<UnionOperator>())
+        {
+            if (union.GetDescendants<WildcardedName>().Count > 0)
+            {
+                violations.Add(Make(code, filePath, union.TextStart, "KQL005",
+                    "Wildcard 'union' fans out across many tables; list the specific tables instead."));
+            }
+        }
+
+        // KQL007: regex-heavy operations.
+        foreach (var bin in root.GetDescendants<BinaryExpression>())
+        {
+            if (bin.Kind == SyntaxKind.MatchesRegexExpression)
+            {
+                violations.Add(Make(code, filePath, bin.Operator.TextStart, "KQL007",
+                    "'matches regex' is CPU-heavy; prefer 'has'/'startswith' when matching whole terms."));
+            }
+        }
+        foreach (var call in root.GetDescendants<FunctionCallExpression>())
+        {
+            if (RegexFunctions.Contains(call.Name.SimpleName))
+            {
+                violations.Add(Make(code, filePath, call.TextStart, "KQL007",
+                    $"'{call.Name.SimpleName}' uses regex and is CPU-heavy; prefer 'parse'/'split' for simple extraction."));
+            }
+        }
+        foreach (var parse in root.GetDescendants<ParseOperator>())
+        {
+            // ponytail: text-scan for kind=regex (default 'parse' is simple mode,
+            // which is cheap). Upgrade to NamedParameter inspection if it ever misfires.
+            if (parse.ToString().Replace(" ", "").Contains("kind=regex", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add(Make(code, filePath, parse.TextStart, "KQL007",
+                    "'parse kind=regex' is CPU-heavy; use simple 'parse' mode when the input is delimited."));
+            }
+        }
+
+        // --- Statement-level heuristics (KQL003, KQL006, KQL008) ---
+        foreach (var stmt in root.GetDescendants<ExpressionStatement>())
+        {
+            var expr = stmt.Expression;
+            var source = BaseSource(expr);
+
+            // ponytail: heuristic — time bound = any ago() call or BETWEEN. A literal
+            // datetime comparison (TimeGenerated > datetime(...)) is not detected; tune
+            // via the KQL003 weight in Rules if it proves noisy.
+            bool hasTimeBound =
+                expr.GetDescendants<FunctionCallExpression>()
+                    .Any(c => c.Name.SimpleName.Equals("ago", StringComparison.OrdinalIgnoreCase))
+                || expr.GetDescendants<BetweenExpression>().Count > 0;
+
+            // Only treat queries that read directly from a named table as candidates
+            // for KQL003/KQL008. search/union/print have their own rules / are not
+            // table scans.
+            bool readsTable = source is NameReference;
+
+            if (readsTable && !hasTimeBound)
+            {
+                violations.Add(Make(code, filePath, source.TextStart, "KQL003",
+                    "No time filter; add e.g. '| where TimeGenerated > ago(1d)' to avoid a full-table scan."));
+            }
+
+            // KQL006: a join with no time window anywhere in the statement.
+            // ponytail: per-statement check — if the statement has a time bound we
+            // assume the join is windowed. Misses joins where only one side is
+            // windowed; revisit if false negatives matter.
+            if (!hasTimeBound)
+            {
+                foreach (var join in expr.GetDescendants<JoinOperator>())
+                {
+                    violations.Add(Make(code, filePath, join.TextStart, "KQL006",
+                        "Join has no time window; add a time filter (e.g. 'where TimeGenerated > ago(1d)') before joining."));
+                }
+            }
+
+            if (readsTable)
+            {
+                bool hasReducer = expr.GetDescendants<SyntaxNode>()
+                    .Any(n => ReducerOperators.Contains(n.GetType().Name));
+                if (!hasReducer)
+                {
+                    violations.Add(Make(code, filePath, source.TextStart, "KQL008",
+                        "No project/summarize/take; reduce columns and rows early to cut memory and cost."));
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    private static Expression BaseSource(Expression expr)
+    {
+        while (expr is PipeExpression pipe)
+        {
+            expr = pipe.Expression;
+        }
+        return expr;
+    }
+
+    private static Violation Make(KustoCode code, string filePath, int position, string ruleId, string message)
+    {
+        Program.GetLineAndColumn(code, position, out var line, out var col);
+        var info = Rules.All.First(r => r.Id == ruleId);
+        return new Violation(filePath, line, col, info.DefaultLevel, ruleId, message, info.CostWeight);
+    }
+}

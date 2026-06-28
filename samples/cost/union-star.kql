@@ -1,0 +1,5 @@
+// KQL005: wildcard union
+union Security*
+| where TimeGenerated > ago(1d)
+| project TimeGenerated
+| take 10

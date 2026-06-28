@@ -1,0 +1,5 @@
+// KQL002: contains
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where ProcessName contains "mimikatz"
+| project ProcessName
