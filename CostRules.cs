@@ -45,6 +45,8 @@ public static class Rules
             "'mv-expand' with no 'limit' can explode row counts; add 'limit N' to cap fan-out.", "warning", 3),
         new("KQL010", "CrossClusterQuery",
             "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
+        new("KQL011", "UnboundedSort",
+            "'sort'/'order by' with no following 'take'/'top' materializes and sorts the whole result; cap it with 'take N' or use 'top N'.", "warning", 2),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -206,6 +208,16 @@ public static class CostAnalyzer
             {
                 violations.Add(Make(code, filePath, call.TextStart, "KQL010",
                     $"'{fn}()' references another cluster/database; network egress adds latency and cost."));
+            }
+        }
+
+        // KQL011: sort with no take/top — full result materialized and sorted.
+        foreach (var sort in root.GetDescendants<SortOperator>())
+        {
+            if (root.GetDescendants<TakeOperator>().Count == 0)
+            {
+                violations.Add(Make(code, filePath, sort.TextStart, "KQL011",
+                    "Unbounded 'sort'; add 'take N' or use 'top N by ...' to avoid sorting the full result."));
             }
         }
 

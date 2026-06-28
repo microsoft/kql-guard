@@ -58,6 +58,7 @@ offline.
 | KQL008 | **No reduction** (no `project`/`summarize`/`take`) — keeps all columns/rows | 1 |
 | KQL009 | **Unbounded `mv-expand`** — no `limit`, can explode row counts | 3 |
 | KQL010 | **Cross-cluster** `cluster()`/`database()` — network egress, latency | 2 |
+| KQL011 | **Unbounded `sort`/`order by`** — full sort, no `take`/`top` | 2 |
 
 KQL003, KQL006 and KQL008 are heuristics and may occasionally over-report;
 their weights are all defined in one place (`Rules.All` in

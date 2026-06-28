@@ -41,6 +41,7 @@ kql-guard fmt <path> [--write|--check]
 | KQL008 | No reduction (no `project`/`summarize`/`take`) | 1 |
 | KQL009 | Unbounded `mv-expand` | 3 |
 | KQL010 | Cross-cluster `cluster()`/`database()` | 2 |
+| KQL011 | Unbounded sort (no take/top) | 2 |
 
 ## 4. Distribution
 
