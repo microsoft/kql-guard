@@ -38,6 +38,18 @@ jobs:
           mode: prebuilt
           path: "."
 
+      - name: Build demo SARIF (with schema, for inline alerts)
+        if: always()
+        run: bin/Release/net8.0/linux-x64/publish/kql-guard demo/detections --schema demo/schema.json --format sarif > demo-results.sarif || true
+
+      - name: Upload demo SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        if: always()
+        with:
+          sarif_file: demo-results.sarif
+          category: kql-guard-demo
+
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
         continue-on-error: true   # Code scanning needs a public repo / GHAS
