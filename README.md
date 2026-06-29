@@ -14,7 +14,7 @@ a costly query is ever merged.
 ## Usage
 
 ```bash
-kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json] [--baseline file] [--write-baseline]
+kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json] [--baseline file] [--write-baseline] [--schema schemas.json]
 ```
 
 | Argument | Description |
@@ -25,6 +25,7 @@ kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes si
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
 | `--baseline <file>` | Suppress findings recorded in the baseline; fail only on new ones. |
 | `--write-baseline` | Record current findings to the baseline and exit 0. |
+| `--schema <file>` | Opt-in semantic check: bind table schemas (`{"Table":[{"name","type"}]}`) and flag unknown columns/tables as `KQL101`. |
 
 Exit codes: `0` clean · `1` findings or budget breach · `2` usage error.
 
@@ -49,6 +50,7 @@ offline.
 | Rule | What it flags | Weight |
 |------|---------------|--------|
 | KQL001 | Syntax error (from the parser) | — |
+| KQL101 | Unknown column/table/function — **requires** `--schema` | — |
 | KQL002 | `contains` / `contains_cs` — full-text scan; prefer `has` | 1 |
 | KQL003 | Table query with **no time filter** (`ago()`/`between`) — full-table scan | 5 |
 | KQL004 | **Unscoped `search`** — queries every table | 5 |

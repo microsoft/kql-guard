@@ -40,6 +40,7 @@ runtime required at execution time.
 7. Distribution: composite GitHub Action, Docker image, super-linter path.
 8. Sentinel `.yaml` detection rules: lint the embedded query in place.
 9. Baseline: ratchet on existing repos — fail only on newly introduced findings.
+10. Schema-aware validation: opt-in unknown-column/table detection against supplied schemas.
 
 ## 6. Success metrics
 

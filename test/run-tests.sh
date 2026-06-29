@@ -54,6 +54,12 @@ else
   echo "ok: clean has no findings"
 fi
 
+# Schema validation: --schema flags unknown columns; valid query and no-schema stay clean.
+SC=samples/schema
+assert_contains "KQL101 unknown col" "KQL101" "$(RUN $SC/unknown-col.kql --schema $SC/sentinel-schema.json)"
+if RUN $SC/valid.kql --schema $SC/sentinel-schema.json | grep -q KQL101; then echo "FAIL: schema false positive"; fails=$((fails+1)); else echo "ok: valid query passes schema"; fi
+if RUN $SC/unknown-col.kql | grep -q KQL101; then echo "FAIL: KQL101 without schema"; fails=$((fails+1)); else echo "ok: no schema, no semantic check"; fi
+
 # Score sums correctly (KQL003 5 + KQL006 3 = 8).
 assert_contains "score sums (join file = 8)" "cost score 8" "$(RUN $S/unwindowed-join.kql)"
 

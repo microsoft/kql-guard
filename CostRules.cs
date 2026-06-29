@@ -27,6 +27,8 @@ public static class Rules
     {
         new("KQL001", "SyntaxError",
             "KQL syntax error detected by the parser.", "error", 0),
+        new("KQL101", "UnknownColumnOrTable",
+            "Reference to a column, table, or function not present in the supplied schema (requires --schema).", "error", 0),
         new("KQL002", "AvoidContainsOperator",
             "The 'contains' operator performs a full-text scan; prefer 'has' for whole-term matching.", "warning", 1),
         new("KQL003", "MissingTimeFilter",

@@ -34,6 +34,7 @@ public static class Program
         string? tableSizesPath = null;
         string? baselinePath = null;
         bool writeBaseline = false;
+        string? schemaPath = null;
 
         // Parse the remaining flags order-independently.
         for (int i = 1; i < args.Length; i++)
@@ -76,6 +77,12 @@ public static class Program
             {
                 writeBaseline = true;
             }
+            else if (string.Equals(args[i], "--schema", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Length)
+            {
+                schemaPath = args[i + 1];
+                i++;
+            }
             else
             {
                 Console.Error.WriteLine($"Unrecognized argument: {args[i]}");
@@ -101,12 +108,22 @@ public static class Program
                 return 2;
             }
         }
+        Kusto.Language.GlobalState? schema = null;
+        if (schemaPath != null)
+        {
+            try { schema = SchemaLoader.FromJson(File.ReadAllText(schemaPath)); }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to read --schema '{schemaPath}': {ex.Message}");
+                return 2;
+            }
+        }
         var violations = new List<Violation>();
         var scores = new List<(string File, int Score)>();
         bool budgetBreached = false;
         foreach (var filePath in files)
         {
-            var fileViolations = AnalyzeFile(filePath);
+            var fileViolations = AnalyzeFile(filePath, schema);
             violations.AddRange(fileViolations);
 
             int score = 0;
@@ -196,7 +213,7 @@ public static class Program
 
     private static string BaselineSig(Violation v) => $"{v.RuleId}\t{v.File}\t{v.Message}";
 
-    private static List<Violation> AnalyzeFile(string filePath)
+    private static List<Violation> AnalyzeFile(string filePath, Kusto.Language.GlobalState? schema = null)
     {
         var violations = new List<Violation>();
         var raw = File.ReadAllText(filePath);
@@ -210,6 +227,18 @@ public static class Program
         {
             GetLineAndColumn(code, diag.Start, out var line, out var col);
             violations.Add(new Violation(filePath, line, col, "error", "KQL001", diag.Message));
+        }
+
+        // Rule KQL101: opt-in semantic check against a supplied schema. Catches
+        // unknown columns/tables — kql-guard is otherwise schema-blind.
+        if (schema != null && violations.Count == 0)
+        {
+            var analyzed = KustoCode.ParseAndAnalyze(text, schema);
+            foreach (var diag in analyzed.GetDiagnostics())
+            {
+                GetLineAndColumn(analyzed, diag.Start, out var line, out var col);
+                violations.Add(new Violation(filePath, line, col, "error", "KQL101", diag.Message));
+            }
         }
 
         // Rules KQL002–KQL008: static FinOps cost profiling. The Kusto parser is

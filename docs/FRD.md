@@ -26,12 +26,14 @@ kql-guard fmt <path> [--write|--check]
 | FR-10 | Cost rules are skipped for files with syntax errors (unreliable AST). |
 | FR-11 | Sentinel `.yaml`/`.yml` rules: extract the embedded `query:` block and lint it, mapping findings to the YAML's own line numbers. |
 | FR-12 | `--write-baseline` records findings; `--baseline` suppresses recorded ones (rule+file+message), failing only on new. |
+| FR-13 | `--schema <file>` binds table schemas and semantically analyzes queries, flagging unknown columns/tables as KQL101; omitted → no semantic check, fully offline. |
 
 ## 3. Rule catalog
 
 | Rule | Flags | Weight |
 |------|-------|--------|
 | KQL001 | Syntax error | — |
+| KQL101 | Unknown column/table/function (requires --schema) | — |
 | KQL002 | `contains`/`contains_cs` full-text scan | 1 |
 | KQL003 | No time filter — full-table scan | 5 |
 | KQL004 | Unscoped `search` | 5 |

@@ -76,6 +76,7 @@ public sealed record SarifRegion(
 [JsonSerializable(typeof(SarifLog))]
 [JsonSerializable(typeof(JsonReport))]
 [JsonSerializable(typeof(Dictionary<string, int>))]
+[JsonSerializable(typeof(Dictionary<string, List<SchemaColumn>>))]
 internal partial class KqlGuardSarifContext : JsonSerializerContext;
 
 // kql-guard's own machine-readable report (--format json).
