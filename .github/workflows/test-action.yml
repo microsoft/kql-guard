@@ -32,17 +32,6 @@ jobs:
       - name: Build kql-guard (NativeAOT)
         run: dotnet publish -c Release -r linux-x64
 
-      # --- Demo showcase: each feature on one realistic detection (demo/) ---
-      - name: Demo — cost gate (expected to fail)
-        continue-on-error: true
-        run: bin/Release/net8.0/linux-x64/publish/kql-guard demo/detections --max-cost 1
-      - name: Demo — schema validation (KQL101)
-        continue-on-error: true
-        run: bin/Release/net8.0/linux-x64/publish/kql-guard demo/detections --schema demo/schema.json
-      - name: Demo — formatter check
-        continue-on-error: true
-        run: bin/Release/net8.0/linux-x64/publish/kql-guard fmt demo/detections --check
-
       - name: Run KQL Guard
         uses: ./
         with:
@@ -63,3 +52,34 @@ jobs:
         with:
           name: kql-guard-results
           path: kql-guard-results.sarif
+
+  # --- Exec demo: each feature is its own visible check, red where it should be ---
+  demo-cost-gate:
+    name: "Demo: FinOps cost gate (expect fail)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Block over-budget query
+        run: dotnet run -- demo/detections --max-cost 1
+
+  demo-schema:
+    name: "Demo: schema validation KQL101 (expect fail)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Flag unknown column
+        run: dotnet run -- demo/detections --schema demo/schema.json
+
+  demo-formatter:
+    name: "Demo: gofmt-for-KQL (expect fail)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Enforce canonical style
+        run: dotnet run -- fmt demo/detections --check
