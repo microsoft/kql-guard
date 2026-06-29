@@ -32,6 +32,17 @@ jobs:
       - name: Build kql-guard (NativeAOT)
         run: dotnet publish -c Release -r linux-x64
 
+      # --- Demo showcase: each feature on one realistic detection (demo/) ---
+      - name: Demo — cost gate (expected to fail)
+        continue-on-error: true
+        run: bin/Release/net8.0/linux-x64/publish/kql-guard demo/detections --max-cost 1
+      - name: Demo — schema validation (KQL101)
+        continue-on-error: true
+        run: bin/Release/net8.0/linux-x64/publish/kql-guard demo/detections --schema demo/schema.json
+      - name: Demo — formatter check
+        continue-on-error: true
+        run: bin/Release/net8.0/linux-x64/publish/kql-guard fmt demo/detections --check
+
       - name: Run KQL Guard
         uses: ./
         with:

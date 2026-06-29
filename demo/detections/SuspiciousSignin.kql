@@ -1,0 +1,5 @@
+SigninLogs
+| where ResultType == "0"
+| where AppDisplayName contains "admin"
+| where UserPrincipalNam endswith "@contoso.com"
+| project    TimeGenerated,UserPrincipalName,   IPAddress

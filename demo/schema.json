@@ -1,0 +1,1 @@
+{"SigninLogs":[{"name":"TimeGenerated","type":"datetime"},{"name":"UserPrincipalName","type":"string"},{"name":"IPAddress","type":"string"},{"name":"ResultType","type":"string"},{"name":"AppDisplayName","type":"string"}]}
