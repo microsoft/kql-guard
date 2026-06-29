@@ -5,8 +5,9 @@ on:
     branches: [main]
 
 permissions:
+  actions: read             # Required by upload-sarif to query workflow run metadata
   contents: read
-  security-events: write   # Required for github/codeql-action/upload-sarif
+  security-events: write    # Required for github/codeql-action/upload-sarif
 
 jobs:
   kql-guard:
@@ -22,6 +23,12 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Run rule self-check
+        run: ./test/run-tests.sh
+
+      - name: Check KQL formatting
+        run: dotnet bin/Debug/net8.0/kql-guard.dll fmt samples/cost --check
+
       - name: Build kql-guard (NativeAOT)
         run: dotnet publish -c Release -r linux-x64
 
@@ -32,7 +39,15 @@ jobs:
 
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
-        if: always()   # Upload even when kql-guard finds violations (exit 1)
+        continue-on-error: true   # Code scanning needs a public repo / GHAS
+        if: always()
         with:
           sarif_file: kql-guard-results.sarif
           category: kql-guard
+
+      - name: Upload SARIF as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kql-guard-results
+          path: kql-guard-results.sarif

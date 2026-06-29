@@ -1,0 +1,9 @@
+id: 1234
+name: Suspicious PowerShell
+severity: High
+query: |
+  SecurityEvent
+  | where Message contains "Invoke-Expression"
+  | project Computer, Account
+tactics:
+  - Execution

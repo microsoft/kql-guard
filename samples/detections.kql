@@ -1,0 +1,12 @@
+// Detection: Suspicious process creation via contains (should trigger KQL002)
+SecurityEvent
+| where EventID == 4688
+| where ProcessName contains "mimikatz"
+| where CommandLine contains "sekurlsa"
+| project TimeGenerated, Computer, Account, ProcessName, CommandLine
+
+// Detection: Brute-force login attempts using 'has' (clean — no violations)
+SigninLogs
+| where ResultType == "50126"
+| summarize FailedAttempts = count() by UserPrincipalName, bin(TimeGenerated, 1h)
+| where FailedAttempts > 10

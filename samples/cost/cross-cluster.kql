@@ -1,0 +1,3 @@
+union T1, cluster('other').database('db').T2
+| where TimeGenerated > ago(1d)
+| project x

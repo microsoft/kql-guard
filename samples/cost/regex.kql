@@ -1,0 +1,5 @@
+// KQL007: regex-heavy
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where CommandLine matches regex "a.*b"
+| project CommandLine

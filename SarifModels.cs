@@ -15,7 +15,11 @@ public sealed record SarifLog(
 public sealed record SarifRun(
     SarifTool Tool,
     List<SarifResult> Results,
-    string? ColumnKind = null);
+    string? ColumnKind = null,
+    SarifRunProperties? Properties = null);
+
+public sealed record SarifRunProperties(
+    [property: JsonPropertyName("costScores")] Dictionary<string, int> CostScores);
 
 public sealed record SarifTool(
     SarifToolComponent Driver);
@@ -70,4 +74,21 @@ public sealed record SarifRegion(
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     WriteIndented = true)]
 [JsonSerializable(typeof(SarifLog))]
+[JsonSerializable(typeof(JsonReport))]
+[JsonSerializable(typeof(Dictionary<string, int>))]
+[JsonSerializable(typeof(Dictionary<string, List<SchemaColumn>>))]
 internal partial class KqlGuardSarifContext : JsonSerializerContext;
+
+// kql-guard's own machine-readable report (--format json).
+public sealed record JsonReport(
+    List<JsonFinding> Findings,
+    Dictionary<string, int> CostScores);
+
+public sealed record JsonFinding(
+    string File,
+    int Line,
+    int Column,
+    string Severity,
+    string Rule,
+    string Message,
+    int CostWeight);

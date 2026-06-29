@@ -1,0 +1,4 @@
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| where Bogus == 5
+| project Account

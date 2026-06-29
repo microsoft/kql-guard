@@ -1,0 +1,3 @@
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| project Account

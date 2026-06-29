@@ -1,0 +1,4 @@
+SecurityEvent
+| where TimeGenerated > ago(1d)
+| sort by Computer desc
+| project Computer
