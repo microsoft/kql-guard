@@ -33,6 +33,9 @@ jobs:
   download:
     name: mode=download (needs a published release)
     runs-on: ubuntu-latest
+    # ponytail: non-blocking while the repo is private — anonymous asset download
+    # 404s. Goes green automatically once the repo is public (Marketplace state).
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - id: scan
@@ -48,6 +51,8 @@ jobs:
   docker:
     name: mode=docker (needs a published image)
     runs-on: ubuntu-latest
+    # ponytail: non-blocking while the ghcr image is private. Goes green once public.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - id: scan
