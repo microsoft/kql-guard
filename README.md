@@ -91,11 +91,28 @@ kql-guard fmt <path> --check    # exit 1 if any file isn't formatted (CI gate)
 ```yaml
 - uses: microsoft/kql-guard@v1
   with:
-    path: "."
+    path: detections          # file or dir to scan (default ".")
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: kql-guard-results.sarif
 ```
 
-The composite action runs the scan and produces `kql-guard-results.sarif` for
-`github/codeql-action/upload-sarif`. See [`action.yml`](action.yml).
+The action installs the binary itself — no build step needed. Pick how via `mode`:
+
+| `mode` | What it does |
+|--------|--------------|
+| `download` *(default)* | Fetches the release asset for the runner (linux-x64/arm64, osx-arm64, win-x64). |
+| `docker` | Runs `ghcr.io/microsoft/kql-guard:<version>`. Use for runners without a release asset. |
+| `prebuilt` | Runs a locally-built binary (`bin/Release/...` or `prebuilt-path`). |
+
+**Inputs:** `mode`, `version` (release/image tag, default `latest`), `path`, `format`
+(`sarif`/`text`/`json`), `max-cost`, `schema`, `args` (raw passthrough),
+`working-directory`, `fail-on-violations` (default `false`), `prebuilt-path`.
+
+**Outputs:** `sarif-file`, `exit-code` (0 clean / 1 violations / 2 usage).
+
+By default the action stays green and surfaces findings via `exit-code`; set
+`fail-on-violations: true` to gate the job directly. See [`action.yml`](action.yml).
 
 ## Container & super-linter
 

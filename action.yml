@@ -2,36 +2,152 @@ name: "KQL Guard"
 description: "Lint KQL detection rules for syntax errors and performance anti-patterns. Outputs SARIF v2.1.0 for GitHub Code Scanning."
 author: "kql-guard contributors"
 
+branding:
+  icon: "shield"
+  color: "blue"
+
 inputs:
+  mode:
+    description: "How to obtain the binary: download (default, fetch release asset), docker (run ghcr image), or prebuilt (use a locally-built binary)."
+    required: false
+    default: "download"
+  version:
+    description: "Release tag / image tag to use for download and docker modes. Defaults to the latest release."
+    required: false
+    default: "latest"
   path:
     description: "File or directory to scan. Directories are searched recursively for *.kql files."
     required: false
     default: "."
+  format:
+    description: "Output format: sarif (default), text, or json."
+    required: false
+    default: "sarif"
+  max-cost:
+    description: "Fail the scan when a query's estimated cost exceeds this value. Empty = no cost gate."
+    required: false
+    default: ""
+  schema:
+    description: "Path to a schema.json for schema-aware validation. Empty = skip."
+    required: false
+    default: ""
+  args:
+    description: "Raw arguments appended verbatim to the kql-guard invocation (escape hatch)."
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run from. Defaults to the workspace root."
+    required: false
+    default: ""
+  fail-on-violations:
+    description: "When true, the action fails the job if violations are found (CLI exit 1). When false (default), it only sets the exit-code output."
+    required: false
+    default: "false"
+  prebuilt-path:
+    description: "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net8.0/<rid>/publish/kql-guard."
+    required: false
+    default: ""
+
+outputs:
+  sarif-file:
+    description: "Path to the written SARIF file (empty unless format=sarif)."
+    value: ${{ steps.run.outputs.sarif-file }}
+  exit-code:
+    description: "kql-guard exit code: 0 clean, 1 violations, 2 usage error."
+    value: ${{ steps.run.outputs.exit-code }}
 
 runs:
   using: composite
   steps:
     - name: Run kql-guard
+      id: run
       shell: bash
-      working-directory: ${{ github.workspace }}
       run: |
-        BINARY="${{ github.workspace }}/bin/Release/net8.0/linux-x64/publish/kql-guard"
-        if [[ ! -x "$BINARY" ]]; then
-          echo "::error::kql-guard binary not found at $BINARY. Build it first with: dotnet publish -c Release -r linux-x64"
-          exit 1
+        set -euo pipefail
+
+        MODE="${{ inputs.mode }}"
+        VERSION="${{ inputs.version }}"
+        WORKDIR="${{ inputs.working-directory }}"
+        [[ -n "$WORKDIR" ]] && cd "$WORKDIR"
+
+        # ---- assemble arguments (mode-independent) ----
+        ARGS=("${{ inputs.path }}")
+        [[ -n "${{ inputs.format }}"   ]] && ARGS+=(--format "${{ inputs.format }}")
+        [[ -n "${{ inputs.max-cost }}" ]] && ARGS+=(--max-cost "${{ inputs.max-cost }}")
+        [[ -n "${{ inputs.schema }}"   ]] && ARGS+=(--schema "${{ inputs.schema }}")
+        # shellcheck disable=SC2206
+        [[ -n "${{ inputs.args }}"     ]] && ARGS+=(${{ inputs.args }})
+
+        SARIF_FILE=""
+        if [[ "${{ inputs.format }}" == "sarif" ]]; then
+          SARIF_FILE="kql-guard-results.sarif"
         fi
 
-        # Run the scan. Exit code 1 means violations were found — that's expected.
-        # We still want to produce the SARIF file so the upload step can report them.
-        "$BINARY" "${{ inputs.path }}" --format sarif > kql-guard-results.sarif || EXIT_CODE=$?
-        EXIT_CODE=${EXIT_CODE:-0}
+        run_capture() { # "$@" = command; writes stdout to SARIF_FILE when set
+          if [[ -n "$SARIF_FILE" ]]; then
+            "$@" > "$SARIF_FILE"
+          else
+            "$@"
+          fi
+        }
+
+        EXIT_CODE=0
+        case "$MODE" in
+          download)
+            os="${{ runner.os }}"; arch="${{ runner.arch }}"
+            case "$os/$arch" in
+              Linux/X64)     asset="kql-guard-linux-x64" ;;
+              Linux/ARM64)   asset="kql-guard-linux-arm64" ;;
+              macOS/ARM64)   asset="kql-guard-osx-arm64" ;;
+              Windows/X64)   asset="kql-guard-win-x64.exe" ;;
+              *)
+                echo "::error::Unsupported runner $os/$arch for mode: download. Use mode: docker instead."
+                exit 1 ;;
+            esac
+            if [[ "$VERSION" == "latest" ]]; then
+              url="https://github.com/microsoft/kql-guard/releases/latest/download/$asset"
+            else
+              url="https://github.com/microsoft/kql-guard/releases/download/$VERSION/$asset"
+            fi
+            echo "Downloading $url"
+            curl -fsSL -o kql-guard-bin "$url"
+            chmod +x kql-guard-bin
+            run_capture ./kql-guard-bin "${ARGS[@]}" || EXIT_CODE=$?
+            ;;
+
+          docker)
+            image="ghcr.io/microsoft/kql-guard:$VERSION"
+            echo "Running $image"
+            run_capture docker run --rm -v "$PWD":/work -w /work "$image" "${ARGS[@]}" || EXIT_CODE=$?
+            ;;
+
+          prebuilt)
+            BINARY="${{ inputs.prebuilt-path }}"
+            if [[ -z "$BINARY" ]]; then
+              BINARY="bin/Release/net8.0/linux-x64/publish/kql-guard"
+            fi
+            if [[ ! -x "$BINARY" ]]; then
+              echo "::error::kql-guard binary not found at $BINARY. Build it first (dotnet publish -c Release -r linux-x64) or use mode: download."
+              exit 1
+            fi
+            run_capture "$BINARY" "${ARGS[@]}" || EXIT_CODE=$?
+            ;;
+
+          *)
+            echo "::error::Invalid mode '$MODE'. Expected download, docker, or prebuilt."
+            exit 1 ;;
+        esac
+
+        echo "exit-code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        echo "sarif-file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
 
         if [[ $EXIT_CODE -eq 2 ]]; then
-          echo "::error::kql-guard encountered a usage error (exit code 2). Check the path input."
+          echo "::error::kql-guard usage error (exit 2). Check the inputs."
           exit 2
         fi
-
-        echo "kql-guard completed. Results written to kql-guard-results.sarif"
         if [[ $EXIT_CODE -eq 1 ]]; then
-          echo "::warning::kql-guard found violations. See the SARIF output for details."
+          echo "::warning::kql-guard found violations."
+          if [[ "${{ inputs.fail-on-violations }}" == "true" ]]; then
+            exit 1
+          fi
         fi
