@@ -14,12 +14,14 @@ public static class Program
     {
         if (args.Length < 1 || args[0] is "-h" or "--help")
         {
-            Console.Error.WriteLine("Usage: kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json]");
+            Console.Error.WriteLine("Usage: kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--table-sizes sizes.json]");
             Console.Error.WriteLine("       kql-guard fmt <path> [--write|--check]");
             Console.Error.WriteLine("  <path>          A .kql file or a directory to scan recursively.");
             Console.Error.WriteLine("  --format sarif  Emit SARIF v2.1.0 instead of text diagnostics.");
             Console.Error.WriteLine("  --max-cost <n>  Fail (exit 1) if any file's cost score exceeds n.");
+            Console.Error.WriteLine("  --strict        Fail (exit 1) on any finding, including advisory cost warnings.");
             Console.Error.WriteLine("  fmt             Format KQL; --write rewrites files, --check gates CI.");
+            Console.Error.WriteLine("  Exit codes: 0 clean/advisory-only · 1 errors, budget breach, or --strict findings · 2 usage.");
             return args.Length < 1 ? 2 : 0;
         }
 
@@ -35,6 +37,7 @@ public static class Program
         string? baselinePath = null;
         bool writeBaseline = false;
         string? schemaPath = null;
+        bool strict = false;
 
         // Parse the remaining flags order-independently.
         for (int i = 1; i < args.Length; i++)
@@ -76,6 +79,10 @@ public static class Program
             else if (string.Equals(args[i], "--write-baseline", StringComparison.OrdinalIgnoreCase))
             {
                 writeBaseline = true;
+            }
+            else if (string.Equals(args[i], "--strict", StringComparison.OrdinalIgnoreCase))
+            {
+                strict = true;
             }
             else if (string.Equals(args[i], "--schema", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length)
@@ -182,7 +189,13 @@ public static class Program
             }
         }
 
-        return (violations.Count > 0 || budgetBreached) ? 1 : 0;
+        // Exit code: cost warnings are advisory (exit 0 on their own). The build
+        // fails only on a real error (syntax KQL001 / schema KQL101), a --max-cost
+        // budget breach, or --strict (which gates on any finding). A clean, valid
+        // query stays 0 even if it carries cost.
+        bool hasError = violations.Any(v => v.Severity == "error");
+        bool failed = hasError || budgetBreached || (strict && violations.Count > 0);
+        return failed ? 1 : 0;
     }
 
     /// <summary>

@@ -40,7 +40,7 @@ inputs:
     required: false
     default: ""
   fail-on-violations:
-    description: "When true, the action fails the job if violations are found (CLI exit 1). When false (default), it only sets the exit-code output."
+    description: "When true, the action fails the job when kql-guard exits 1 (errors, --max-cost breach, or --strict findings). When false (default), it only sets the exit-code output. Cost warnings are advisory — pass --max-cost or --strict via args to gate on them."
     required: false
     default: "false"
   prebuilt-path:
@@ -53,7 +53,7 @@ outputs:
     description: "Path to the written SARIF file (empty unless format=sarif)."
     value: ${{ steps.run.outputs.sarif-file }}
   exit-code:
-    description: "kql-guard exit code: 0 clean, 1 violations, 2 usage error."
+    description: "kql-guard exit code: 0 clean/advisory, 1 errors or --max-cost/--strict gate, 2 usage error."
     value: ${{ steps.run.outputs.exit-code }}
 
 runs:
