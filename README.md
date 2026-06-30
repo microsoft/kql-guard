@@ -14,7 +14,7 @@ a costly query is ever merged.
 ## Usage
 
 ```bash
-kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes sizes.json] [--baseline file] [--write-baseline] [--schema schemas.json]
+kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--table-sizes sizes.json] [--baseline file] [--write-baseline] [--schema schemas.json]
 ```
 
 | Argument | Description |
@@ -22,12 +22,15 @@ kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--table-sizes si
 | `<path>` | A `.kql`/`.yaml`/`.yml` file or a directory scanned recursively. Sentinel `.yaml` rules: the embedded `query:` is linted in place. |
 | `--format text\|sarif\|json` | Output as text diagnostics (default), SARIF v2.1.0, or JSON. |
 | `--max-cost <n>` | Fail (exit `1`) if any file's cost score exceeds `n`. |
+| `--strict` | Fail (exit `1`) on any finding, including advisory cost warnings. |
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
 | `--baseline <file>` | Suppress findings recorded in the baseline; fail only on new ones. |
 | `--write-baseline` | Record current findings to the baseline and exit 0. |
 | `--schema <file>` | Opt-in semantic check: bind table schemas (`{"Table":[{"name","type"}]}`) and flag unknown columns/tables as `KQL101`. |
 
-Exit codes: `0` clean · `1` findings or budget breach · `2` usage error.
+Exit codes: `0` clean or advisory-only · `1` errors (`KQL001`/`KQL101`), `--max-cost` breach, or any finding under `--strict` · `2` usage error.
+
+Cost warnings (`KQL002`–`KQL013`) are **advisory** — a valid-but-expensive query reports its cost score but exits `0` on its own. Gate on cost with `--max-cost`, or fail on every finding with `--strict`. Only real errors (syntax/schema) fail by default.
 
 **Suppress** a finding with an inline comment: `// kql-guard:disable KQL003`,
 `// kql-guard:disable-next-line` or `// kql-guard:disable-file`.
@@ -109,10 +112,12 @@ The action installs the binary itself — no build step needed. Pick how via `mo
 (`sarif`/`text`/`json`), `max-cost`, `schema`, `args` (raw passthrough),
 `working-directory`, `fail-on-violations` (default `false`), `prebuilt-path`.
 
-**Outputs:** `sarif-file`, `exit-code` (0 clean / 1 violations / 2 usage).
+**Outputs:** `sarif-file`, `exit-code` (0 clean/advisory · 1 errors, `--max-cost` breach, or `--strict` findings · 2 usage).
 
 By default the action stays green and surfaces findings via `exit-code`; set
-`fail-on-violations: true` to gate the job directly. See [`action.yml`](action.yml).
+`fail-on-violations: true` to fail the job when `exit-code` is 1. Cost warnings
+are advisory — gate on them by passing `--max-cost N` or `--strict` via `args`.
+See [`action.yml`](action.yml).
 
 ## Container & super-linter
 

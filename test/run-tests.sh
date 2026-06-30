@@ -67,6 +67,15 @@ assert_contains "score sums (join file = 8)" "cost score 8" "$(RUN $S/unwindowed
 RUN $S/no-timefilter.kql --max-cost 4 >/dev/null; assert_exit "budget breach" 1 $?
 RUN $S/clean.kql --max-cost 10 >/dev/null;        assert_exit "within budget" 0 $?
 
+# Exit-code model: cost warnings are advisory (exit 0 alone); --strict gates them;
+# real errors (syntax/schema) and budget breaches always fail.
+RUN $S/casefold-take.kql >/dev/null;          assert_exit "warning advisory (no gate)" 0 $?
+RUN $S/casefold-take.kql --strict >/dev/null; assert_exit "warning fails under --strict" 1 $?
+RUN $SC/unknown-col.kql --schema $SC/sentinel-schema.json >/dev/null; assert_exit "schema error fails" 1 $?
+synbad=$(mktemp --suffix=.kql); printf 'MyTable | wheree x == 1\n' > "$synbad"
+RUN "$synbad" >/dev/null; assert_exit "syntax error fails" 1 $?
+rm -f "$synbad"
+
 # SARIF stays valid and lists the new rules.
 sarif=$(RUN $S/ --format sarif)
 if python3 - "$sarif" <<'PY'
