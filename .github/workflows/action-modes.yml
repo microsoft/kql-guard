@@ -1,0 +1,61 @@
+name: Action modes
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  prebuilt:
+    name: mode=prebuilt (always-on self-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Build kql-guard (NativeAOT)
+        run: dotnet publish -c Release -r linux-x64
+      - id: scan
+        uses: ./
+        with:
+          mode: prebuilt
+          path: samples
+      - name: Assert SARIF + exit-code
+        run: |
+          test -f "${{ steps.scan.outputs.sarif-file }}"
+          echo "exit-code=${{ steps.scan.outputs.exit-code }}"
+          [[ "${{ steps.scan.outputs.exit-code }}" =~ ^[012]$ ]]
+
+  download:
+    name: mode=download (needs a published release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          mode: download
+          path: samples
+      - name: Assert SARIF + exit-code
+        run: |
+          test -f "${{ steps.scan.outputs.sarif-file }}"
+          [[ "${{ steps.scan.outputs.exit-code }}" =~ ^[012]$ ]]
+
+  docker:
+    name: mode=docker (needs a published image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          mode: docker
+          path: samples
+      - name: Assert SARIF + exit-code
+        run: |
+          test -f "${{ steps.scan.outputs.sarif-file }}"
+          [[ "${{ steps.scan.outputs.exit-code }}" =~ ^[012]$ ]]

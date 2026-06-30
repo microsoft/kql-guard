@@ -35,6 +35,7 @@ jobs:
       - name: Run KQL Guard
         uses: ./
         with:
+          mode: prebuilt
           path: "."
 
       - name: Upload SARIF to GitHub Code Scanning
