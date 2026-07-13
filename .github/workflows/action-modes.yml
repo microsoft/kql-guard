@@ -14,7 +14,7 @@ jobs:
     name: mode=prebuilt (always-on self-check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: "8.0.x" }
       - name: Build kql-guard (NativeAOT)
@@ -37,7 +37,7 @@ jobs:
     # 404s. Goes green automatically once the repo is public (Marketplace state).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         with:
@@ -54,7 +54,7 @@ jobs:
     # ponytail: non-blocking while the ghcr image is private. Goes green once public.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         with:
