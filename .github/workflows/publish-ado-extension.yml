@@ -23,7 +23,7 @@ jobs:
       VS_MARKETPLACE_PUBLISHER: ${{ secrets.VS_MARKETPLACE_PUBLISHER }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
       - name: Install tooling
