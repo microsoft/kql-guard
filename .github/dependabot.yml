@@ -19,6 +19,11 @@ updates:
     groups:
       npm:
         update-types: [minor, patch]
+    # TypeScript 7 (the native-compiler rewrite) removes tsconfig options we
+    # rely on and buys nothing for compiling the task handler. Stay on 5.x.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Dockerfile base images (dotnet sdk + runtime-deps)
   - package-ecosystem: docker
