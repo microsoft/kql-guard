@@ -33,7 +33,7 @@ jobs:
         run: |
           bin=out/kql-guard; [ -f "$bin.exe" ] && bin="$bin.exe"
           cp "$bin" "kql-guard-${{ matrix.rid }}${bin##*kql-guard}"
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: kql-guard-${{ matrix.rid }}*
 
