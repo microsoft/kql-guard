@@ -3,6 +3,8 @@ name: KQL Guard — Lint & Upload SARIF
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   actions: read             # Required by upload-sarif to query workflow run metadata

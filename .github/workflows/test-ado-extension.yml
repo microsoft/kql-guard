@@ -1,0 +1,35 @@
+name: ADO extension — build & test
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["azure-devops/**"]
+  push:
+    branches: [main]
+    paths: ["azure-devops/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: azure-devops
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Install tooling
+        run: npm ci
+      - name: Install task runtime deps
+        run: npm ci
+        working-directory: azure-devops/KqlGuardTask
+      - name: Build handler (tsc)
+        run: npm run build
+      - name: Self-test
+        run: npm test
