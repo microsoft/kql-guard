@@ -7,6 +7,6 @@ WORKDIR /src
 COPY . .
 RUN dotnet publish -c Release -r linux-x64 -o /out
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
 COPY --from=build /out/kql-guard /usr/local/bin/kql-guard
 ENTRYPOINT ["kql-guard"]
