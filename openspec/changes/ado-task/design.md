@@ -38,8 +38,9 @@ tab; inline visibility additionally uses `##vso[task.logissue …]`.
 - No second ADO task for live schema `pull`, no telemetry, no custom extension
   UI (task.json auto-generates the input form), and no mapping of SARIF into the
   Tests/Coverage tabs — the Scans tab plus inline issues is the surface.
-- No hand-rolled input parser or bespoke download/caching layer — the blessed
-  `azure-pipelines-task-lib` / `azure-pipelines-tool-lib` do this with less code.
+- No hand-rolled input parser — the blessed `azure-pipelines-task-lib` does it
+  with less code. (The release download is a few lines of stdlib `fetch`, not a
+  dependency; see Decision 2.)
 - No on-prem Azure DevOps **Server** (Node16) target unless later requested; the
   handler is Node20 (Decision 2).
 
@@ -57,11 +58,14 @@ reimplementation of any analysis.
 `execution: { Node20_1: { target: "index.js" } }` handler. The handler uses
 `azure-pipelines-task-lib` for typed input reading (`getInput`/`getBoolInput`/
 `getPathInput`), result setting (`setResult`), artifact upload (`uploadArtifact`),
-and issue logging, and `azure-pipelines-tool-lib` for `downloadTool` in
-`download` mode. Rationale: these are the Microsoft-maintained, AOT-irrelevant
-(Node) building blocks; rolling our own arg parsing or HTTP download would be
-more code and less robust. Node20 is the current ADO hosted-agent runtime;
-Node16 is only needed for older on-prem Server, which the user did not request.
+and issue logging. The `download` mode fetches the release asset with the Node
+stdlib `fetch` (redirects followed) — not `azure-pipelines-tool-lib`, whose
+pinned transitive `uuid@3` carries a security advisory and which we would pull in
+for a single function. Rationale: task-lib is the Microsoft-maintained,
+AOT-irrelevant (Node) building block for inputs/results; the one download we need
+is a few stdlib lines, so no second dependency earns its keep. Node20 is the
+current ADO hosted-agent runtime; Node16 is only needed for older on-prem Server,
+which the user did not request.
 
 **3. Reimplement the 3 modes in the handler, do not re-derive analysis.** The
 handler computes the OS/arch → asset name exactly as the Action does

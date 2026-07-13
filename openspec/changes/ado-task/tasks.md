@@ -1,7 +1,7 @@
 ## 1. Scaffold the `azure-devops/` extension
 
 - [x] 1.1 Create `azure-devops/package.json` (private, name `kql-guard-ado`) with
-      dev-deps `azure-pipelines-task-lib`, `azure-pipelines-tool-lib`,
+      dev-deps `azure-pipelines-task-lib`,
       `typescript`, `@types/node`, `tfx-cli`, and scripts: `build` (`tsc`),
       `test` (`node KqlGuardTask/test.js`), `package` (`tfx extension create`).
 - [x] 1.2 Add `azure-devops/tsconfig.json` targeting Node20 (CommonJS, `outDir`
@@ -28,7 +28,8 @@
       (`kql-guard-linux-x64`, `kql-guard-linux-arm64`, `kql-guard-osx-arm64`,
       `kql-guard-win-x64.exe`); build the release URL
       (`releases/latest/download/<asset>` or `releases/download/<version>/<asset>`);
-      `toolLib.downloadTool`, `chmod +x` on POSIX, return the local path. On an
+      download it with the Node stdlib `fetch` (redirects followed) to the agent
+      temp dir, `chmod +x` on POSIX. On an
       unsupported os/arch, fail naming the os/arch and pointing at `mode: docker`.
 - [x] 3.2 `docker` mode: run `docker run --rm -v <workspace>:/src -w /src
       ghcr.io/microsoft/kql-guard:<version>` with the assembled args; treat a

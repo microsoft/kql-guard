@@ -57,13 +57,14 @@ renders as a Scans tab. This makes `- task: KqlGuard@1` as turnkey in ADO as
   `images/kql-guard.png`, `package.json`, `tsconfig.json`, and
   `KqlGuardTask/{task.json, index.ts→index.js, test.js}`. A Node20 handler using
   `azure-pipelines-task-lib` (input parsing, `setResult`, `uploadArtifact`,
-  `logIssue`) and `azure-pipelines-tool-lib` (`downloadTool`). No change to the
-  .NET analyzer, `action.yml`, or existing workflows.
+  `logIssue`); the release download in `download` mode uses the Node stdlib
+  `fetch` (no `azure-pipelines-tool-lib` — its pinned transitive `uuid@3` carries
+  a security advisory, and it would earn its place for a single function). No
+  change to the .NET analyzer, `action.yml`, or existing workflows.
 - **CLI surface**: None. The task shells out to the same `kql-guard` binary/
   image the Action uses; the analyzer is untouched.
 - **Dependencies**: Node/npm dev-time only, scoped to `azure-devops/`
-  (`azure-pipelines-task-lib`, `azure-pipelines-tool-lib`, `tfx-cli`,
-  `typescript`). The published task bundles its runtime deps; the .NET build and
+  (`azure-pipelines-task-lib`, `tfx-cli`, `typescript`, `@types/node`). The published task bundles its runtime deps; the .NET build and
   its zero-runtime-dependency NativeAOT pillar are unaffected.
 - **Release/CI**: New `publish-ado-extension.yml`. It reuses the same release
   assets/image the Action consumes; no new binaries are produced. Publish is

@@ -1,4 +1,5 @@
 import fs = require('fs');
+import os = require('os');
 import path = require('path');
 import tl = require('azure-pipelines-task-lib/task');
 
@@ -56,6 +57,17 @@ export function downloadUrl(asset: string, version: string): string {
   return version === 'latest'
     ? `${base}/latest/download/${asset}`
     : `${base}/download/${version}/${asset}`;
+}
+
+/** Download a URL to a local file with the Node stdlib (fetch follows redirects). */
+async function downloadBinary(url: string, dest: string): Promise<void> {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) {
+    throw new Error(`Download failed (${res.status} ${res.statusText}): ${url}`);
+  }
+  // ponytail: buffers the whole asset (tens of MB); stream to disk if the
+  // release binaries ever grow large.
+  fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
 }
 
 export interface LogIssue {
@@ -132,12 +144,11 @@ async function run(): Promise<void> {
             `Unsupported agent ${process.platform}/${process.arch} for mode: download. Use mode: docker instead.`);
           return;
         }
-        const toolLib = require('azure-pipelines-tool-lib/tool');
         const url = downloadUrl(asset, inputs.version);
         console.log(`Downloading ${url}`);
-        const downloaded: string = await toolLib.downloadTool(url);
-        tool = path.join(path.dirname(downloaded), asset);
-        fs.renameSync(downloaded, tool);
+        const tmpDir = tl.getVariable('Agent.TempDirectory') || os.tmpdir();
+        tool = path.join(tmpDir, asset);
+        await downloadBinary(url, tool);
         if (process.platform !== 'win32') fs.chmodSync(tool, 0o755);
         break;
       }
