@@ -93,6 +93,32 @@ sizes=$(mktemp --suffix=.json); echo '{"SecurityEvent":10}' > "$sizes"
 assert_contains "enrich scales score" "cost score 50" "$(RUN $S/no-timefilter.kql --table-sizes "$sizes")"
 rm -f "$sizes"
 
+# Live schema pull: parse a captured `.show database schema as json` response
+# offline, write an object-form --schema file, and bind a stored-function call.
+pull=$(mktemp --suffix=.json)
+RUN pull --from-response $SC/show-schema-response.json --database TestDB -o "$pull" >/dev/null
+assert_contains "pull writes functions" '"functions"' "$(cat "$pull")"
+assert_contains "pull maps column type" '"type": "datetime"' "$(cat "$pull")"
+funcout=$(RUN $SC/func-call.kql --schema "$pull")
+if [[ "$funcout" == *"KQL101"* ]]; then
+  echo "FAIL: pulled function flagged KQL101"; echo "  got: $funcout"; fails=$((fails+1))
+else echo "ok: pulled function binds clean"; fi
+assert_contains "unknown column still flagged with pulled schema" "KQL101" "$(RUN $SC/unknown-col.kql --schema "$pull")"
+rm -f "$pull"
+
+# Missing token in live mode is a usage error (exit 2); no network is attempted.
+RUN pull --cluster https://x.kusto.windows.net --database D >/dev/null 2>&1
+assert_exit "pull missing token" 2 $?
+
+# Sizes: integer factor = round(size / baseline), clamped to >= 1.
+szf=$(mktemp --suffix=.json)
+RUN pull --from-response $SC/show-schema-response.json \
+  --sizes-from-response $SC/show-tables-details-response.json \
+  --with-sizes "$szf" --size-baseline 1000000000 --database TestDB -o /dev/null >/dev/null
+assert_contains "size factor for large table" '"SecurityEvent": 5' "$(cat "$szf")"
+assert_contains "size factor clamped to 1"   '"Heartbeat": 1'     "$(cat "$szf")"
+rm -f "$szf"
+
 # Sentinel YAML: extract embedded query and map findings to the YAML's own rows.
 assert_contains "yaml KQL002 line 6" "sentinel-rule.yaml(6," "$(RUN samples/sentinel-rule.yaml)"
 
