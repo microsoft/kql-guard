@@ -47,7 +47,7 @@ jobs:
           category: kql-guard
 
       - name: Upload SARIF as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: kql-guard-results
