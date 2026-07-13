@@ -1,0 +1,18 @@
+{
+  "name": "kql-guard-ado",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure DevOps Marketplace extension packaging the KqlGuard pipeline task.",
+  "scripts": {
+    "install:task": "npm --prefix KqlGuardTask install",
+    "build": "tsc",
+    "test": "node KqlGuardTask/test.js",
+    "package": "tfx extension create --manifest-globs vss-extension.json --output-path .",
+    "clean": "node -e \"require('fs').rmSync('KqlGuardTask/index.js',{force:true})\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tfx-cli": "^0.23.4",
+    "typescript": "^5.5.0"
+  }
+}

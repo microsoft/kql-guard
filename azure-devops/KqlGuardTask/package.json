@@ -1,0 +1,11 @@
+{
+  "name": "kql-guard-task",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KqlGuard Azure Pipelines task runtime.",
+  "main": "index.js",
+  "dependencies": {
+    "azure-pipelines-task-lib": "^5.277.0",
+    "azure-pipelines-tool-lib": "^2.0.12"
+  }
+}

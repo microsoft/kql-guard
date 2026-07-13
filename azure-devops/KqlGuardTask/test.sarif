@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "kql-guard",
+          "rules": [
+            { "id": "KQL001", "name": "KQL001" },
+            { "id": "KQL003", "name": "KQL003" }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "KQL001",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": { "text": "Syntax error: unexpected token" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "detections/a.kql" },
+                "region": { "startLine": 3, "startColumn": 5 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "KQL003",
+          "ruleIndex": 1,
+          "level": "warning",
+          "message": { "text": "Leading wildcard scan is expensive" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "detections/b.kql" },
+                "region": { "startLine": 1, "startColumn": 1 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
