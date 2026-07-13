@@ -1,0 +1,9 @@
+# Node deps (bundled at package time, never committed)
+node_modules/
+KqlGuardTask/node_modules/
+
+# Compiled handler + packaged extension (produced by build/package)
+KqlGuardTask/index.js
+KqlGuardTask/*.js.map
+*.vsix
+.taskkey

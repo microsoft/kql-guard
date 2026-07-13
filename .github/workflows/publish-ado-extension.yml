@@ -1,0 +1,46 @@
+name: Publish ADO extension
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: azure-devops
+    env:
+      # Marketplace publish is gated on these secrets. While the extension's
+      # Marketplace identity is a placeholder, they are absent and the publish
+      # step is skipped (not failed) — the .vsix is still built and uploaded.
+      # ponytail: mirrors the non-blocking download job in action-modes.yml.
+      VS_MARKETPLACE_TOKEN: ${{ secrets.VS_MARKETPLACE_TOKEN }}
+      VS_MARKETPLACE_PUBLISHER: ${{ secrets.VS_MARKETPLACE_PUBLISHER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install tooling
+        run: npm ci
+      - name: Install task runtime deps
+        run: npm ci
+        working-directory: azure-devops/KqlGuardTask
+      - name: Build handler
+        run: npm run build
+      - name: Self-test
+        run: npm test
+      - name: Package .vsix
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kql-guard-vsix
+          path: azure-devops/*.vsix
+      - name: Publish to Marketplace
+        if: env.VS_MARKETPLACE_TOKEN != '' && env.VS_MARKETPLACE_PUBLISHER != ''
+        run: npx tfx-cli extension publish --manifest-globs vss-extension.json --publisher "$VS_MARKETPLACE_PUBLISHER" --token "$VS_MARKETPLACE_TOKEN"

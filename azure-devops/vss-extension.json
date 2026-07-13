@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 1,
+  "id": "kql-guard",
+  "name": "KQL Guard",
+  "version": "1.0.0",
+  "publisher": "kql-guard-publisher",
+  "public": false,
+  "description": "Lint KQL detection rules for syntax errors and performance anti-patterns in Azure Pipelines. Emits SARIF v2.1.0.",
+  "categories": ["Azure Pipelines"],
+  "tags": ["kql", "kusto", "sarif", "linter", "security", "detection"],
+  "targets": [{ "id": "Microsoft.VisualStudio.Services" }],
+  "icons": { "default": "images/kql-guard.png" },
+  "content": { "details": { "path": "overview.md" } },
+  "links": {
+    "repository": { "uri": "https://github.com/microsoft/kql-guard" },
+    "issues": { "uri": "https://github.com/microsoft/kql-guard/issues" }
+  },
+  "repository": { "type": "git", "uri": "https://github.com/microsoft/kql-guard" },
+  "files": [{ "path": "KqlGuardTask" }],
+  "contributions": [
+    {
+      "id": "kql-guard-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": ["ms.vss-distributed-task.tasks"],
+      "properties": { "name": "KqlGuardTask" }
+    }
+  ]
+}

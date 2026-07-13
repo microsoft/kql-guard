@@ -161,6 +161,41 @@ By default the action stays green and surfaces findings via `exit-code`; set
 are advisory — gate on them by passing `--max-cost N` or `--strict` via `args`.
 See [`action.yml`](action.yml).
 
+## Azure DevOps
+
+Same analyzer, packaged as an Azure Pipelines task. Install the extension
+(`azure-devops/`), then:
+
+```yaml
+- task: KqlGuard@1
+  inputs:
+    path: 'detections'          # file or dir to scan (default ".")
+```
+
+The task installs the binary itself (same three `mode`s as the Action:
+`download` *(default)* / `docker` / `prebuilt`) and, for `format: sarif`,
+surfaces findings two ways: it publishes the SARIF as a **`CodeAnalysisLogs`**
+artifact (rendered by the free
+[SARIF SAST Scans Tab](https://marketplace.visualstudio.com/items?itemName=sariftools.scans)
+extension) **and** logs each finding inline as a build warning/error.
+
+**Inputs:** `path`, `mode`, `version` (default `latest`), `format`, `maxCost`,
+`schema`, `args` (raw passthrough), `workingDirectory`, `failOnViolations`
+(default `false`), `prebuiltPath`, plus `publishSarifArtifact`/`logIssues` (both
+default `true`). **Outputs:** `exitCode`, `sarifFile`.
+
+```yaml
+# Gate the pipeline on errors or a cost budget:
+- task: KqlGuard@1
+  inputs:
+    path: 'detections'
+    maxCost: '50'
+    failOnViolations: true
+```
+
+Advisory by default (the stage stays green, `exitCode` is set); set
+`failOnViolations: true` to fail on exit 1. See [`azure-devops/`](azure-devops/).
+
 ## Container & super-linter
 
 A self-contained image ships only the NativeAOT binary:

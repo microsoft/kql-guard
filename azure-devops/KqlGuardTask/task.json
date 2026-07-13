@@ -1,0 +1,117 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "2cf8d5a4-f915-4a4d-b7ee-446e2e0a12a8",
+  "name": "KqlGuard",
+  "friendlyName": "KQL Guard",
+  "description": "Lint KQL detection rules for syntax errors and performance anti-patterns. Emits SARIF v2.1.0.",
+  "helpMarkDown": "[Documentation](https://github.com/microsoft/kql-guard)",
+  "category": "Utility",
+  "author": "kql-guard contributors",
+  "version": { "Major": 1, "Minor": 0, "Patch": 0 },
+  "instanceNameFormat": "KQL Guard $(path)",
+  "inputs": [
+    {
+      "name": "path",
+      "type": "string",
+      "label": "Path",
+      "defaultValue": ".",
+      "required": false,
+      "helpMarkDown": "File or directory to scan. Directories are searched recursively for *.kql files."
+    },
+    {
+      "name": "mode",
+      "type": "pickList",
+      "label": "Mode",
+      "defaultValue": "download",
+      "required": false,
+      "options": { "download": "download (fetch release asset)", "docker": "docker (run ghcr image)", "prebuilt": "prebuilt (use a locally-built binary)" },
+      "helpMarkDown": "How to obtain the binary."
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "label": "Version",
+      "defaultValue": "latest",
+      "required": false,
+      "visibleRule": "mode = download || mode = docker",
+      "helpMarkDown": "Release tag / image tag for download and docker modes. Defaults to the latest release."
+    },
+    {
+      "name": "format",
+      "type": "pickList",
+      "label": "Output format",
+      "defaultValue": "sarif",
+      "required": false,
+      "options": { "sarif": "sarif", "text": "text", "json": "json" },
+      "helpMarkDown": "Output format. SARIF surfacing (artifact + inline issues) applies to sarif only."
+    },
+    {
+      "name": "maxCost",
+      "type": "string",
+      "label": "Max cost",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Fail the scan when a query's estimated cost exceeds this value. Empty = no cost gate."
+    },
+    {
+      "name": "schema",
+      "type": "filePath",
+      "label": "Schema file",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Path to a schema.json for schema-aware validation. Empty = skip."
+    },
+    {
+      "name": "args",
+      "type": "string",
+      "label": "Extra arguments",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Raw arguments appended verbatim to the kql-guard invocation (e.g. --strict --table-sizes sizes.json)."
+    },
+    {
+      "name": "workingDirectory",
+      "type": "filePath",
+      "label": "Working directory",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Directory to run from. Defaults to the pipeline working directory."
+    },
+    {
+      "name": "failOnViolations",
+      "type": "boolean",
+      "label": "Fail on violations",
+      "defaultValue": "false",
+      "required": false,
+      "helpMarkDown": "When true, fail the task when kql-guard exits 1 (errors, --max-cost breach, or --strict findings). When false (default), the task completes with issues and sets the exitCode output."
+    },
+    {
+      "name": "prebuiltPath",
+      "type": "filePath",
+      "label": "Prebuilt binary path",
+      "defaultValue": "",
+      "required": false,
+      "visibleRule": "mode = prebuilt",
+      "helpMarkDown": "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net8.0/linux-x64/publish/kql-guard."
+    },
+    {
+      "name": "publishSarifArtifact",
+      "type": "boolean",
+      "label": "Publish SARIF artifact",
+      "defaultValue": "true",
+      "required": false,
+      "helpMarkDown": "Publish the SARIF as a 'CodeAnalysisLogs' build artifact, rendered by the SARIF SAST Scans Tab extension. sarif format only."
+    },
+    {
+      "name": "logIssues",
+      "type": "boolean",
+      "label": "Log findings inline",
+      "defaultValue": "true",
+      "required": false,
+      "helpMarkDown": "Emit each SARIF finding as an inline build warning/error. sarif format only."
+    }
+  ],
+  "execution": {
+    "Node20_1": { "target": "index.js" }
+  }
+}
