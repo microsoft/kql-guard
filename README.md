@@ -26,7 +26,7 @@ kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--tab
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
 | `--baseline <file>` | Suppress findings recorded in the baseline; fail only on new ones. |
 | `--write-baseline` | Record current findings to the baseline and exit 0. |
-| `--schema <file>` | Opt-in semantic check: bind table schemas (`{"Table":[{"name","type"}]}`) and flag unknown columns/tables as `KQL101`. |
+| `--schema <file>` | Opt-in semantic check: bind table schemas (`{"Table":[{"name","type"}]}`) and flag unknown columns/tables as `KQL101`. Object-form files (`{"tables":{…},"functions":[…]}`, as written by `pull`) additionally bind stored functions so their calls resolve. |
 
 Exit codes: `0` clean or advisory-only · `1` errors (`KQL001`/`KQL101`), `--max-cost` breach, or any finding under `--strict` · `2` usage error.
 
@@ -89,6 +89,48 @@ kql-guard fmt <path> --write    # rewrite files in place
 kql-guard fmt <path> --check    # exit 1 if any file isn't formatted (CI gate)
 ```
 
+## Live schema pull
+
+`lint` stays **100% offline** — but a real cluster knows things a checked-in
+schema doesn't: every table's columns, the stored **functions** your queries
+call, and how big each table actually is. The opt-in `pull` subcommand fetches
+those over the Kusto REST API and writes them into the very same `--schema` /
+`--table-sizes` files the offline linter already consumes. Pull once, commit the
+result, then lint offline forever.
+
+```bash
+# 1. Fetch schema (tables + stored functions) into a --schema file.
+kql-guard pull --cluster https://help.kusto.windows.net --database Samples -o schemas.json
+
+# 2. (optional) Also fetch per-table sizes into a --table-sizes map.
+kql-guard pull --cluster https://help.kusto.windows.net --database Samples \
+  -o schemas.json --with-sizes sizes.json
+
+# 3. Commit schemas.json / sizes.json, then lint offline — function calls now bind.
+kql-guard detections/ --schema schemas.json --table-sizes sizes.json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--cluster <uri>` | Cluster URI, e.g. `https://help.kusto.windows.net`. |
+| `--database <db>` | Database to pull (one per invocation). |
+| `-o, --out <file>` | Schema output path (default `schemas.json`). |
+| `--with-sizes <file>` | Also fetch `.show tables details` and write a `{"Table":factor}` size map. |
+| `--size-baseline <bytes>` | Bytes that equal factor `1`; defaults to the median table size. |
+| `--token <jwt>` | Bearer token; or set `KQL_GUARD_TOKEN`. **Never logged.** |
+
+**Auth is an injected bearer token only** — no SDK, no interactive sign-in, so
+the single NativeAOT binary is preserved. In CI:
+
+```bash
+export KQL_GUARD_TOKEN=$(az account get-access-token --resource https://help.kusto.windows.net --query accessToken -o tsv)
+kql-guard pull --cluster https://help.kusto.windows.net --database Samples -o schemas.json
+```
+
+Schema needs only `Database Viewer`; `--with-sizes` additionally needs
+`Database Monitor` (hence it stays opt-in). Exit codes: `0` success · `1` a
+request failed · `2` usage error (e.g. missing token).
+
 ## GitHub Action
 
 ```yaml
@@ -141,7 +183,7 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
 
 ## Roadmap
 
-- **Live-API cost enrichment** — `--table-sizes` already scales weights from a
-  static map; a future opt-in step fetches real sizes via the `ICostEnricher`
-  seam, keeping the default fully offline.
+- **Live-API cost enrichment** — `--table-sizes` scales weights from a static
+  map; `pull --with-sizes` fetches real sizes into that map via the
+  `ICostEnricher` seam, keeping the default fully offline.
 - **Upstream into `super-linter`** for out-of-the-box KQL validation.

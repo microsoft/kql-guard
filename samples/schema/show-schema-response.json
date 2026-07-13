@@ -1,0 +1,18 @@
+{
+  "Tables": [
+    {
+      "TableName": "Table_0",
+      "Columns": [
+        {
+          "ColumnName": "DatabaseSchema",
+          "DataType": "String"
+        }
+      ],
+      "Rows": [
+        [
+          "{\"Databases\": {\"TestDB\": {\"Name\": \"TestDB\", \"Tables\": {\"SecurityEvent\": {\"Name\": \"SecurityEvent\", \"OrderedColumns\": [{\"Name\": \"TimeGenerated\", \"Type\": \"System.DateTime\", \"CslType\": \"datetime\"}, {\"Name\": \"Account\", \"Type\": \"System.String\", \"CslType\": \"string\"}, {\"Name\": \"EventID\", \"Type\": \"System.Int32\", \"CslType\": \"int\"}]}}, \"Functions\": {\"AccountActivity\": {\"Name\": \"AccountActivity\", \"InputParameters\": [{\"Name\": \"acct\", \"Type\": \"System.String\", \"CslType\": \"string\"}], \"Body\": \"{ SecurityEvent | where Account == acct }\", \"Folder\": \"\", \"DocString\": \"\"}}}}}"
+        ]
+      ]
+    }
+  ]
+}

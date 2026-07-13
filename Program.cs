@@ -16,11 +16,13 @@ public static class Program
         {
             Console.Error.WriteLine("Usage: kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--table-sizes sizes.json]");
             Console.Error.WriteLine("       kql-guard fmt <path> [--write|--check]");
+            Console.Error.WriteLine("       kql-guard pull --cluster <uri> --database <db> [-o schemas.json] [--with-sizes sizes.json]");
             Console.Error.WriteLine("  <path>          A .kql file or a directory to scan recursively.");
             Console.Error.WriteLine("  --format sarif  Emit SARIF v2.1.0 instead of text diagnostics.");
             Console.Error.WriteLine("  --max-cost <n>  Fail (exit 1) if any file's cost score exceeds n.");
             Console.Error.WriteLine("  --strict        Fail (exit 1) on any finding, including advisory cost warnings.");
             Console.Error.WriteLine("  fmt             Format KQL; --write rewrites files, --check gates CI.");
+            Console.Error.WriteLine("  pull            Fetch a live cluster's schema (+ optional sizes) into a --schema file.");
             Console.Error.WriteLine("  Exit codes: 0 clean/advisory-only · 1 errors, budget breach, or --strict findings · 2 usage.");
             return args.Length < 1 ? 2 : 0;
         }
@@ -28,6 +30,11 @@ public static class Program
         if (args[0] == "fmt")
         {
             return Formatter.Run(args);
+        }
+
+        if (args[0] == "pull")
+        {
+            return SchemaPull.Run(args);
         }
 
         var target = args[0];
