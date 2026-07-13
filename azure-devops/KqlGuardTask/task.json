@@ -92,7 +92,7 @@
       "defaultValue": "",
       "required": false,
       "visibleRule": "mode = prebuilt",
-      "helpMarkDown": "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net8.0/linux-x64/publish/kql-guard."
+      "helpMarkDown": "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net10.0/linux-x64/publish/kql-guard."
     },
     {
       "name": "publishSarifArtifact",

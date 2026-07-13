@@ -2,7 +2,7 @@
 
 ## 1. Platform
 
-- Language/runtime: C# on **.NET 8**, `PublishAot=true`, `InvariantGlobalization`.
+- Language/runtime: C# on **.NET 10**, `PublishAot=true`, `InvariantGlobalization`.
 - Dependency: `Microsoft.Azure.Kusto.Language` 12.3.2 (offline parser/formatter).
 - Build: `dotnet publish -c Release -r linux-x64` → self-contained native binary.
 - Test: `./test/run-tests.sh` (framework-free golden checks). No live cluster.

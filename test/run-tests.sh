@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-BIN="bin/Debug/net8.0/kql-guard.dll"
+BIN="bin/Debug/net10.0/kql-guard.dll"
 if [[ ! -f "$BIN" ]]; then
   dotnet build -c Debug >/dev/null || { echo "build failed"; exit 1; }
 fi

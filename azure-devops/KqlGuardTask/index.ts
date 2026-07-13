@@ -159,7 +159,7 @@ async function run(): Promise<void> {
         break;
       }
       case 'prebuilt': {
-        tool = inputs.prebuiltPath || 'bin/Release/net8.0/linux-x64/publish/kql-guard';
+        tool = inputs.prebuiltPath || 'bin/Release/net10.0/linux-x64/publish/kql-guard';
         if (!fs.existsSync(tool)) {
           tl.setResult(tl.TaskResult.Failed,
             `kql-guard binary not found at ${tool}. Build it first (dotnet publish -c Release -r linux-x64) or use mode: download.`);

@@ -44,7 +44,7 @@ inputs:
     required: false
     default: "false"
   prebuilt-path:
-    description: "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net8.0/<rid>/publish/kql-guard."
+    description: "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net10.0/<rid>/publish/kql-guard."
     required: false
     default: ""
 
@@ -124,7 +124,7 @@ runs:
           prebuilt)
             BINARY="${{ inputs.prebuilt-path }}"
             if [[ -z "$BINARY" ]]; then
-              BINARY="bin/Release/net8.0/linux-x64/publish/kql-guard"
+              BINARY="bin/Release/net10.0/linux-x64/publish/kql-guard"
             fi
             if [[ ! -x "$BINARY" ]]; then
               echo "::error::kql-guard binary not found at $BINARY. Build it first (dotnet publish -c Release -r linux-x64) or use mode: download."
