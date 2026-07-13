@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # .NET analyzer dependency (Microsoft.Azure.Kusto.Language)
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        update-types: [minor, patch]
+
+  # Azure DevOps extension: dev tooling + bundled task runtime deps
+  - package-ecosystem: npm
+    directories:
+      - "/azure-devops"
+      - "/azure-devops/KqlGuardTask"
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  # Dockerfile base images (dotnet sdk + runtime-deps)
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Workflow actions (checkout, setup-dotnet, upload-artifact, ...)
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
