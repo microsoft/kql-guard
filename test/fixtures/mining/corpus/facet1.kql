@@ -1,0 +1,3 @@
+Events
+| where Timestamp > ago(1d)
+| facet by Region

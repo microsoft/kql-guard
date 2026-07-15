@@ -1,0 +1,14 @@
+{
+  "facet1": {"durationMs": 4200, "cpuMs": 3800, "memoryPeakBytes": 9000000, "scannedRows": 100000000, "state": "Completed", "failureReason": null},
+  "facet2": {"durationMs": 3900, "cpuMs": 3500, "memoryPeakBytes": 8000000, "scannedRows": 90000000, "state": "Completed", "failureReason": null},
+  "proj1": {"durationMs": 40, "cpuMs": 20, "memoryPeakBytes": 5000, "scannedRows": 500, "state": "Completed", "failureReason": null},
+  "proj2": {"durationMs": 38, "cpuMs": 19, "memoryPeakBytes": 5000, "scannedRows": 500, "state": "Completed", "failureReason": null},
+  "proj3": {"durationMs": 42, "cpuMs": 21, "memoryPeakBytes": 5000, "scannedRows": 500, "state": "Completed", "failureReason": null},
+  "proj4": {"durationMs": 39, "cpuMs": 20, "memoryPeakBytes": 5000, "scannedRows": 500, "state": "Completed", "failureReason": null},
+  "agg1": {"durationMs": 25, "cpuMs": 12, "memoryPeakBytes": 3000, "scannedRows": 800, "state": "Completed", "failureReason": null},
+  "agg2": {"durationMs": 27, "cpuMs": 13, "memoryPeakBytes": 3000, "scannedRows": 800, "state": "Completed", "failureReason": null},
+  "agg3": {"durationMs": 24, "cpuMs": 12, "memoryPeakBytes": 3000, "scannedRows": 800, "state": "Completed", "failureReason": null},
+  "take1": {"durationMs": 12, "cpuMs": 6, "memoryPeakBytes": 2000, "scannedRows": 100, "state": "Completed", "failureReason": null},
+  "take2": {"durationMs": 11, "cpuMs": 5, "memoryPeakBytes": 2000, "scannedRows": 100, "state": "Completed", "failureReason": null},
+  "take3": {"durationMs": 13, "cpuMs": 6, "memoryPeakBytes": 2000, "scannedRows": 100, "state": "Completed", "failureReason": null}
+}

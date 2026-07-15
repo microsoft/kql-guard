@@ -1,0 +1,3 @@
+Logs
+| where Timestamp > ago(7d)
+| facet by Level

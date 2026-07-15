@@ -8,4 +8,5 @@ scratch/
 /report.md
 /candidates.json
 /candidate.json
+/manifest.json
 __pycache__/

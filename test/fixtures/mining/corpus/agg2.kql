@@ -1,0 +1,2 @@
+Requests
+| summarize count() by ResultCode
