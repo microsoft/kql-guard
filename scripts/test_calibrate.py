@@ -53,6 +53,19 @@ def test_weight_disagreement_flags_underweighted_expensive_rule():
     assert by_rule["KQL003"]["suggest"] == "down-weight"
 
 
+def test_failure_catch_splits_syntax_from_semantic():
+    findings, manifest = load("findings.json"), load("manifest.json")
+    fc = calibrate.failure_catch(findings, manifest)
+    # q3 Failed with a syntax reason AND has a KQL001 finding -> catchable.
+    # q5 Failed with a semantic reason and no finding -> schema-dependent.
+    assert fc["failed"] == 2
+    assert fc["catchable"] == 1
+    assert fc["schemaDependent"] == 1
+    assert fc["missed"] == 0
+    # Guarantee no failureReason text leaks into the emitted report.
+    assert all(isinstance(v, int) for v in fc.values())
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):

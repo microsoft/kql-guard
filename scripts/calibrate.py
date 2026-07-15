@@ -93,6 +93,30 @@ def weight_disagreement(findings_doc, per_rule, rank_metric="durationMs", thresh
     return sorted(flags, key=lambda f: f["rule"])
 
 
+def failure_catch(findings_doc, manifest):
+    """Of the queries ADX reports as Failed, how many could kql-guard catch
+    offline? A query is 'catchable' when kql-guard produced a KQL001 syntax
+    finding for it. Semantic failures (SEM/'Semantic error') need a schema
+    kql-guard does not have offline -> schema-dependent. Anything else Failed
+    without a finding is 'missed'. Returns counts only; failureReason strings
+    are classified here but never emitted (they can embed identifiers)."""
+    syntactic_caught = {qid(f["file"]) for f in findings_doc.get("findings", [])
+                        if f["rule"] == "KQL001"}
+    failed = {i: m for i, m in manifest.items() if m.get("state") == "Failed"}
+    catchable = schema_dependent = missed = 0
+    for i, m in failed.items():
+        reason = m.get("failureReason") or ""
+        is_semantic = "Semantic error" in reason or "SEM" in reason
+        if i in syntactic_caught:
+            catchable += 1
+        elif is_semantic:
+            schema_dependent += 1
+        else:
+            missed += 1
+    return {"failed": len(failed), "catchable": catchable,
+            "schemaDependent": schema_dependent, "missed": missed}
+
+
 def _fmt(agg):
     if not agg:
         return "—"
@@ -138,7 +162,7 @@ def main(argv):
     per_rule, baseline = correlate(findings_doc, manifest)
     report = {"perRule": per_rule, "baseline": baseline,
               "weightReview": weight_disagreement(findings_doc, per_rule),
-              "failureCatch": {}}
+              "failureCatch": failure_catch(findings_doc, manifest)}
     if "--json" in argv:
         with open(argv[argv.index("--json") + 1], "w") as f:
             json.dump(report, f, indent=2, sort_keys=True)
