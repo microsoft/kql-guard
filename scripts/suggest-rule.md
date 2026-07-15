@@ -25,9 +25,15 @@ already-abstracted shape signature, and it must emit only synthetic content.
   "analyzerBlock": "        // KQL014 ...\n        foreach (...) { violations.Add(Make(...)); }\n",
   "sample": "SyntheticTable\n| ...\n",
   "sampleSlug": "kebab-slug",
-  "signature": "<echo of the input signature, for PR fingerprinting>"
+  "signature": "<echo of the input signature, for PR fingerprinting>",
+  "count": 42,
+  "medianDurationMs": 1234.5
 }
 ```
+
+`signature`, `count`, and `medianDurationMs` are echoed straight from the input:
+they are already-abstracted aggregates (never query text) and become the PR's
+review evidence. Everything else must be synthetic.
 
 The drafted diff may touch only: `CostRules.cs` (a `RuleInfo` entry + the
 `analyzerBlock` inside `CostAnalyzer.Analyze`), `samples/cost/<sampleSlug>.kql`,

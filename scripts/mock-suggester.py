@@ -42,6 +42,8 @@ def main():
         "sample": SAMPLE,
         "sampleSlug": "facet",
         "signature": req.get("signature", ""),
+        "count": req.get("count", 0),
+        "medianDurationMs": req.get("medianDurationMs", 0),
     }
     json.dump(candidate, sys.stdout, indent=2)
     return 0
