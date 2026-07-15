@@ -164,6 +164,7 @@ bash    scripts/test_propose_weight.sh || fails=$((fails+1))
 python3 scripts/test_mine.py          || fails=$((fails+1))
 python3 scripts/test_apply_candidate.py || fails=$((fails+1))
 bash    scripts/test_validate_candidate.sh || fails=$((fails+1))
+bash    scripts/test_publish_candidate.sh || fails=$((fails+1))
 
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi
