@@ -21,6 +21,7 @@ kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--tab
 |----------|-------------|
 | `<path>` | A `.kql`/`.yaml`/`.yml` file or a directory scanned recursively. Sentinel `.yaml` rules: the embedded `query:` is linted in place. |
 | `--format text\|sarif\|json` | Output as text diagnostics (default), SARIF v2.1.0, or JSON. |
+| `--shapes` | Internal (shape mining): with `--format json`, add a per-query boundary-safe AST **shape signature** map — operator/built-in kinds only, no identifiers or literals. Not needed for routine linting; see Roadmap. |
 | `--max-cost <n>` | Fail (exit `1`) if any file's cost score exceeds `n`. |
 | `--strict` | Fail (exit `1`) on any finding, including advisory cost warnings. |
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |

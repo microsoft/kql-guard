@@ -3,6 +3,11 @@ name: Kuskus calibration report
 # Runs on a self-hosted runner that has Kuskus (confidential ADX) access.
 # Aperiodic: weekly cron + manual dispatch. Only aggregate numbers leave the
 # runner; query text stays in the git-ignored scratch/.
+#
+# Deferred integrations (shipped as fail-closed stubs): the real QueryCompletion
+# fetch (scripts/fetch-corpus.sh) and the provider-specific AI suggester. The
+# calibration + weight-review path needs no AI; the pipeline runs end-to-end
+# today against a supplied corpus_path via scripts/mock-suggester.py.
 on:
   workflow_dispatch:
     inputs:
