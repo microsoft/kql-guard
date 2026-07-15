@@ -34,3 +34,18 @@ jobs:
       - name: Publish report to job summary
         if: always()
         run: cat report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  mine:
+    runs-on: [self-hosted, kuskus]
+    needs: calibrate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch corpus + cost manifest
+        run: scripts/fetch-corpus.sh   # real fetch (deferred); fails closed until implemented
+      - name: Mine shapes + draft/validate/publish new-rule candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APPLY=""
+          if [[ "${{ inputs.apply }}" == "true" ]]; then APPLY="--apply"; fi
+          scripts/run-mining.sh --corpus-path scratch --manifest manifest.json $APPLY

@@ -228,6 +228,13 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
   `scripts/leak-guard.sh`). Weight changes are mechanical and human-reviewed;
   no query text or AI is involved on that path. See
   `openspec/changes/kuskus-rule-suggester/` for the full design.
+
+- **Shape mining (internal).** An aperiodic, self-hosted pipeline clusters
+  recurring query shapes (`--shapes`) from internal telemetry and drafts
+  human-reviewed new-rule PRs behind the same strict trust boundary. Only
+  abstracted shape signatures + aggregate cost cross into this repo; drafted
+  rules are synthetic, fail-closed validated (`scripts/validate-candidate.sh`),
+  and never used by public lint-in-CI runs.
 - **Live-API cost enrichment** — `--table-sizes` scales weights from a static
   map; `pull --with-sizes` fetches real sizes into that map via the
   `ICostEnricher` seam, keeping the default fully offline.
