@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {"file":"scratch/q1.kql","line":1,"column":1,"severity":"warning","rule":"KQL003","message":"m","costWeight":5},
+    {"file":"scratch/q2.kql","line":1,"column":1,"severity":"warning","rule":"KQL002","message":"m","costWeight":1},
+    {"file":"scratch/q3.kql","line":1,"column":15,"severity":"error","rule":"KQL001","message":"m","costWeight":0}
+  ],
+  "costScores": {
+    "scratch/q1.kql":5, "scratch/q2.kql":1, "scratch/q3.kql":0,
+    "scratch/q4.kql":0, "scratch/q5.kql":0
+  }
+}

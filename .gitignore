@@ -3,7 +3,9 @@ obj/
 .github/prompts/
 .github/skills/
 scratch/
-findings.json
-report.json
-report.md
+/findings.json
+/report.json
+/report.md
+/candidates.json
+/candidate.json
 __pycache__/
