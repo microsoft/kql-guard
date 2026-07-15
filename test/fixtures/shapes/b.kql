@@ -1,0 +1,4 @@
+Traffic
+| where SecretCol contains "tokyo"
+| project Kind, Ts
+| take 99
