@@ -64,6 +64,35 @@ def correlate(findings_doc, manifest):
     return per_rule, baseline
 
 
+def weight_disagreement(findings_doc, per_rule, rank_metric="durationMs", threshold=2):
+    """Rank rules by measured median cost vs. their declared CostWeight; flag
+    rules whose two ranks disagree by >= threshold. Rank 0 = most expensive /
+    highest weight, so a positive (costRank - weightRank) means the rule is
+    weighted higher than its measured cost -> down-weight."""
+    weight = {}
+    for fnd in findings_doc.get("findings", []):
+        weight.setdefault(fnd["rule"], fnd.get("costWeight", 0))
+    rules = [r for r in per_rule
+             if weight.get(r, 0) > 0 and per_rule[r].get(rank_metric)]
+    by_cost = sorted(rules, key=lambda r: per_rule[r][rank_metric]["median"], reverse=True)
+    by_weight = sorted(rules, key=lambda r: weight[r], reverse=True)
+    cost_rank = {r: i for i, r in enumerate(by_cost)}
+    weight_rank = {r: i for i, r in enumerate(by_weight)}
+    flags = []
+    for r in rules:
+        diff = cost_rank[r] - weight_rank[r]
+        if abs(diff) >= threshold:
+            flags.append({
+                "rule": r,
+                "weight": weight[r],
+                "medianDurationMs": per_rule[r][rank_metric]["median"],
+                "costRank": cost_rank[r],
+                "weightRank": weight_rank[r],
+                "suggest": "down-weight" if diff > 0 else "up-weight",
+            })
+    return sorted(flags, key=lambda f: f["rule"])
+
+
 def _fmt(agg):
     if not agg:
         return "—"
@@ -108,7 +137,8 @@ def main(argv):
     findings_doc, manifest = load(argv[1]), load(argv[2])
     per_rule, baseline = correlate(findings_doc, manifest)
     report = {"perRule": per_rule, "baseline": baseline,
-              "weightReview": [], "failureCatch": {}}
+              "weightReview": weight_disagreement(findings_doc, per_rule),
+              "failureCatch": {}}
     if "--json" in argv:
         with open(argv[argv.index("--json") + 1], "w") as f:
             json.dump(report, f, indent=2, sort_keys=True)

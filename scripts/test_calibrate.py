@@ -42,6 +42,17 @@ def test_render_has_rules_and_baseline():
     assert "baseline" in md
 
 
+def test_weight_disagreement_flags_underweighted_expensive_rule():
+    findings, manifest = load("findings.json"), load("manifest.json")
+    per_rule, _ = calibrate.correlate(findings, manifest)
+    # threshold=1: with two rules the max rank gap is 1, so this surfaces the
+    # inversion — KQL002 (weight 1) is the most expensive, KQL003 (weight 5) cheapest.
+    flags = calibrate.weight_disagreement(findings, per_rule, threshold=1)
+    by_rule = {f["rule"]: f for f in flags}
+    assert by_rule["KQL002"]["suggest"] == "up-weight"
+    assert by_rule["KQL003"]["suggest"] == "down-weight"
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):
