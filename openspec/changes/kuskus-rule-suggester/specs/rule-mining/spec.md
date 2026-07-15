@@ -1,32 +1,46 @@
 ## ADDED Requirements
 
-### Requirement: Shape-clustering subcommand
+### Requirement: Shape-signature emission
 
-The system SHALL provide a `kql-guard mine <path> [--format json] [--top N]` subcommand that, for every readable-dialect, parser-clean query under the path, computes a normalized AST **shape signature** which preserves KQL operator syntax kinds and built-in function names while omitting user identifiers, literals, and user-defined function names; groups queries by signature; and reports the resulting clusters. The subcommand SHALL skip rows in the engine's expanded/internal dialect (markers such as `__invoke(`, bracket-quoted identifiers, and `assert-schema`) and queries that fail to parse (KQL001), and SHALL NOT emit any raw query text in any output format.
+The analyzer SHALL, when requested via a `--shapes` flag on the existing analyze command, include in its `--format json` output a normalized per-query **shape signature** that preserves KQL operator syntax kinds and built-in function names while omitting user identifiers, literals, and user-defined function names, computed from the parsed AST. The signature SHALL be keyed by query (file) so callers can join it with findings and cost data, SHALL be serialized through the source-generated JSON context (NativeAOT-safe, no reflection), and SHALL contain no raw query text. Queries that fail to parse SHALL be omitted from the shapes map. This SHALL be a flag on the existing command, not a new subcommand.
+
+#### Scenario: Structurally identical queries share a signature
+
+- **WHEN** two queries have the same operator/function structure but different table names, column names, and literals
+- **THEN** the emitted signature is identical for both queries
+
+#### Scenario: Structurally different queries differ in signature
+
+- **WHEN** two queries differ in their operator/function structure
+- **THEN** their emitted signatures differ
+
+#### Scenario: The signature contains no identifiers or literals
+
+- **WHEN** the analyzer emits a query's shape signature
+- **THEN** the signature contains no table names, column names, string/number literals, or user-defined function names from the query
+
+#### Scenario: Shapes output stays NativeAOT-safe
+
+- **WHEN** `--format json --shapes` is serialized
+- **THEN** it goes through the source-generated JSON context and the single-binary NativeAOT publish still succeeds
+
+### Requirement: Shape clustering
+
+The mining step SHALL, from the per-query shape signatures (`kql-guard --format json --shapes`) and the readable-dialect corpus, group queries by identical signature and report the resulting clusters with their occurrence counts. It SHALL operate only on the readable dialect (the fetch having dropped expanded/internal and redacted rows) and SHALL NOT emit any raw query text.
 
 #### Scenario: Structurally identical queries cluster together
 
-- **WHEN** two readable-dialect queries have the same operator/function structure but different table names, column names, and literals
-- **THEN** `mine` reports them in a single cluster with an occurrence count of 2
+- **WHEN** two readable-dialect queries share a shape signature
+- **THEN** the mining step reports them in a single cluster with an occurrence count of 2
 
 #### Scenario: Structurally different queries do not cluster
 
-- **WHEN** two queries differ in their operator/function structure
-- **THEN** `mine` reports them in two separate clusters
-
-#### Scenario: Output contains no identifiers or literals
-
-- **WHEN** `mine` reports a cluster's shape signature
-- **THEN** the signature contains no table names, column names, string/number literals, or user-defined function names from the input queries
-
-#### Scenario: Expanded-dialect rows are skipped
-
-- **WHEN** the corpus contains rows in the engine's expanded/internal form
-- **THEN** `mine` does not cluster them
+- **WHEN** two queries have different shape signatures
+- **THEN** the mining step reports them in two separate clusters
 
 ### Requirement: Existing-finding correlation
 
-For each cluster, the system SHALL report `WithExistingFinding`: the number of member queries that produce at least one existing kql-guard finding when analyzed by the current ruleset. This lets a caller isolate recurring shapes that the current ruleset does not flag (high count, `WithExistingFinding` of 0).
+For each cluster, the mining step SHALL report `WithExistingFinding`: the number of member queries that produce at least one existing kql-guard finding (from the same `--format json` output). This lets it isolate recurring shapes the current ruleset does not flag (high count, `WithExistingFinding` of 0).
 
 #### Scenario: An already-flagged shape reports a non-zero correlation
 
@@ -40,23 +54,14 @@ For each cluster, the system SHALL report `WithExistingFinding`: the number of m
 
 ### Requirement: Cost-ranked ordering
 
-The system SHALL rank clusters by the real execution cost of their member queries (for example, median duration or median scanned rows drawn from the corpus rows), so that `--top N` surfaces the highest-cost recurring shapes rather than merely the most frequent. `--top N` SHALL limit output to the N highest-cost clusters, and a sensible default SHALL apply when the flag is omitted. The ranking SHALL allow isolating clusters with `WithExistingFinding` of 0.
+The mining step SHALL rank clusters by the real execution cost of their member queries (for example, median duration or median scanned rows from the cost manifest), so that the top results are the highest-cost recurring shapes rather than merely the most frequent, and SHALL support limiting output to the top N. It SHALL allow isolating clusters with `WithExistingFinding` of 0 as new-rule candidates.
 
 #### Scenario: The highest-cost recurring shapes surface first
 
-- **WHEN** `mine <path> --top 3` runs over a corpus with more than three distinct shapes
-- **THEN** at most three clusters are emitted, and they are the three highest-cost clusters
+- **WHEN** the mining step ranks clusters and is limited to the top 3
+- **THEN** at most three clusters are reported, and they are the three highest-cost clusters
 
 #### Scenario: A cheap frequent shape does not outrank an expensive one
 
 - **WHEN** a frequent shape's queries are consistently cheap and a rarer shape's queries are consistently expensive
 - **THEN** the expensive shape ranks above the cheap one
-
-### Requirement: AOT-safe JSON output
-
-When `--format json` is given, the system SHALL serialize the ranked clusters (`Shape`, `Count`, `WithExistingFinding`, and the cost aggregate) through the source-generated JSON context, without reflection-based serialization, so the single-binary NativeAOT publish continues to succeed.
-
-#### Scenario: JSON output is machine-readable
-
-- **WHEN** `mine <path> --format json` runs
-- **THEN** the output is valid JSON listing, per cluster, its shape signature, count, `WithExistingFinding`, and cost aggregate

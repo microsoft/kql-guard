@@ -16,7 +16,7 @@ The pipeline SHALL ensure raw corpus query text never appears in workflow logs, 
 
 ### Requirement: Calibration cost report
 
-On each run the pipeline SHALL run `kql-guard calibrate` over the fetched corpus and write to the workflow job summary an aggregate report of, per rule, its firing count and the real execution-cost aggregates (median/p95 duration, scanned rows, CPU, memory) of the queries it flagged, plus the no-findings baseline and the failure-catch measurement. It SHALL also include an existing-rule frequency histogram derived from `kql-guard --format json` via `jq`. The report SHALL contain aggregate numbers and rule identifiers only.
+On each run the pipeline SHALL run the calibration step (a boundary-side script over `kql-guard scratch/ --format json` and the fetched cost manifest — no analyzer subcommand) and write to the workflow job summary an aggregate report of, per rule, its firing count and the real execution-cost aggregates (median/p95 duration, scanned rows, CPU, memory) of the queries it flagged, plus the no-findings baseline and the failure-catch measurement. It SHALL also include an existing-rule frequency histogram derived from `kql-guard --format json` via `jq`. The report SHALL contain aggregate numbers and rule identifiers only.
 
 #### Scenario: The report pairs each rule with its real cost
 
@@ -37,9 +37,9 @@ When calibrate flags a rule whose real-cost rank materially disagrees with its d
 - **WHEN** a weight-review pull request is opened
 - **THEN** the change is not merged automatically and awaits maintainer approval
 
-### Requirement: Secondary candidate discovery
+### Requirement: Candidate discovery via mining
 
-As a secondary capability, the pipeline SHALL rank recurring query shapes using `kql-guard mine` and SHALL select as new-rule candidates the shapes that recur, have a `WithExistingFinding` of 0, and rank high by real cost. This discovery path SHALL operate only on the readable-dialect subset of the corpus.
+The pipeline SHALL rank recurring query shapes using the mining step (a boundary-side script over `kql-guard scratch/ --format json --shapes` and the cost manifest) and SHALL select as new-rule candidates the shapes that recur, have a `WithExistingFinding` of 0, and rank high by real cost. This discovery path SHALL operate only on the readable-dialect subset of the corpus.
 
 #### Scenario: An expensive, frequent, unflagged shape is selected
 
