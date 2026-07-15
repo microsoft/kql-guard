@@ -6,3 +6,4 @@ scratch/
 findings.json
 report.json
 report.md
+__pycache__/
