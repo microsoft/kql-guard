@@ -137,5 +137,11 @@ RUN fmt "$tmp" --check >/dev/null; assert_exit "fmt --check after write" 0 $?
 assert_contains "fmt pipe-per-line" "| where EventID == 4688" "$(cat "$tmp")"
 rm -f "$tmp"
 
+# --- Kuskus calibration pipeline self-checks (Python stdlib + shell) ---
+echo "--- calibration scripts ---"
+python3 scripts/test_calibrate.py     || fails=$((fails+1))
+bash    scripts/test_leak_guard.sh    || fails=$((fails+1))
+bash    scripts/test_propose_weight.sh || fails=$((fails+1))
+
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi

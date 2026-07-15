@@ -218,6 +218,16 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
 
 ## Roadmap
 
+- **Rule calibration (internal)** — an aperiodic pipeline
+  (`.github/workflows/kuskus-report.yml`, self-hosted Kuskus-access runner)
+  correlates kql-guard findings with real ADX `QueryCompletion` execution cost
+  to validate rule CostWeights and surface weight-review PRs. It runs entirely
+  boundary-side (`scripts/*.py`, `scripts/*.sh`) and enforces a strict trust
+  boundary: confidential query text stays in the git-ignored `scratch/`, and
+  only aggregate numbers + rule IDs ever cross into this repo (guarded by
+  `scripts/leak-guard.sh`). Weight changes are mechanical and human-reviewed;
+  no query text or AI is involved on that path. See
+  `openspec/changes/kuskus-rule-suggester/` for the full design.
 - **Live-API cost enrichment** — `--table-sizes` scales weights from a static
   map; `pull --with-sizes` fetches real sizes into that map via the
   `ICostEnricher` seam, keeping the default fully offline.

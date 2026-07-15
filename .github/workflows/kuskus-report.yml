@@ -1,0 +1,36 @@
+name: Kuskus calibration report
+
+# Runs on a self-hosted runner that has Kuskus (confidential ADX) access.
+# Aperiodic: weekly cron + manual dispatch. Only aggregate numbers leave the
+# runner; query text stays in the git-ignored scratch/.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Open mechanical weight PRs (else dry-run)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  calibrate:
+    runs-on: [self-hosted, kuskus]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch corpus + cost manifest
+        run: scripts/fetch-corpus.sh   # real fetch (deferred); fails closed until implemented
+      - name: Run calibration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APPLY=""
+          if [[ "${{ inputs.apply }}" == "true" ]]; then APPLY="--apply"; fi
+          scripts/run-calibration.sh --corpus-path scratch --manifest manifest.json $APPLY
+      - name: Publish report to job summary
+        if: always()
+        run: cat report.md >> "$GITHUB_STEP_SUMMARY" || true
