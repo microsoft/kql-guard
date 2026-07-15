@@ -26,7 +26,7 @@ The analyzer SHALL, when requested via a `--shapes` flag on the existing analyze
 
 ### Requirement: Shape clustering
 
-The mining step SHALL, from the per-query shape signatures (`kql-guard --format json --shapes`) and the readable-dialect corpus, group queries by identical signature and report the resulting clusters with their occurrence counts. It SHALL operate only on the readable dialect (the fetch having dropped expanded/internal and redacted rows) and SHALL NOT emit any raw query text.
+The mining step SHALL, from the per-query shape signatures (`kql-guard --format json --shapes`) and the readable-dialect corpus, group queries by identical signature and report the resulting clusters with their occurrence counts. It SHALL operate only on the readable dialect (the fetch having dropped expanded/internal and redacted rows) and SHALL NOT emit any raw query text. It SHALL exclude queries whose manifest `state` is `Failed` (a failed query has no meaningful cost and is not a rule candidate); such rows are retained by the fetch only for calibration's failure-catch, not for mining.
 
 #### Scenario: Structurally identical queries cluster together
 
@@ -37,6 +37,11 @@ The mining step SHALL, from the per-query shape signatures (`kql-guard --format 
 
 - **WHEN** two queries have different shape signatures
 - **THEN** the mining step reports them in two separate clusters
+
+#### Scenario: A failed query is excluded from mining
+
+- **WHEN** a query parses (so it has a shape signature) but its manifest `state` is `Failed`
+- **THEN** the mining step excludes it from all clusters, so it neither forms a candidate nor skews any cluster's cost
 
 ### Requirement: Existing-finding correlation
 

@@ -6,18 +6,23 @@ import mine
 # Two structurally identical queries (same signature) + one different.
 FINDINGS = {
     "costScores": {"scratch/q1.kql": 1, "scratch/q2.kql": 1,
-                   "scratch/q3.kql": 0, "scratch/q4.kql": 0},
+                   "scratch/q3.kql": 0, "scratch/q4.kql": 0, "scratch/q5.kql": 0},
     "findings": [{"file": "scratch/q1.kql", "rule": "KQL002"}],  # q1 already flagged
     "shapes": {
         "scratch/q1.kql": "A;B;contains;",   # cluster X (flagged member q1)
         "scratch/q2.kql": "A;B;contains;",   # cluster X (unflagged member q2)
         "scratch/q3.kql": "A;facet;",        # cluster Y, cheap, unflagged
         "scratch/q4.kql": "A;facet;",        # cluster Y
+        "scratch/q5.kql": "A;facet;",        # parses, but Failed (semantic) -> mining drops it
     },
 }
 MANIFEST = {
     "q1": {"durationMs": 50}, "q2": {"durationMs": 70},   # cluster X median 60
     "q3": {"durationMs": 5},  "q4": {"durationMs": 9},    # cluster Y median 7
+    # Semantically failed: parses (so it has a shape) and is expensive, but must
+    # not pollute mining. Calibration keeps it for failure-catch; mining drops it.
+    "q5": {"durationMs": 8000, "state": "Failed",
+           "failureReason": "Semantic error: SEM0100: Failed to resolve column 'Foo'"},
 }
 
 
@@ -38,6 +43,11 @@ def main():
     # Existing-finding correlation.
     fails += check("X withExistingFinding 1", by_sig["A;B;contains;"]["withExistingFinding"] == 1)
     fails += check("Y withExistingFinding 0", by_sig["A;facet;"]["withExistingFinding"] == 0)
+
+    # Failed queries are dropped from mining (kept only for calibration's
+    # failure-catch): cluster Y stays count 2 and its cost is not skewed by q5.
+    fails += check("failed row excluded from mining", by_sig["A;facet;"]["count"] == 2)
+    fails += check("failed row not in cluster cost", by_sig["A;facet;"]["medianDurationMs"] == 7)
 
     # Cost-ranked ordering: expensive cluster X first even though both recur equally.
     fails += check("X ranks above Y", clusters[0]["signature"] == "A;B;contains;")

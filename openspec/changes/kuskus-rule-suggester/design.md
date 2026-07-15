@@ -77,6 +77,9 @@ cluster = kuskus   database = Kuskus   table = QueryCompletion
 project Text, Duration, TotalCPU, MemoryPeak, ScannedExtentsStatistics, State, FailureReason, Timestamp
 | where Timestamp > <watermark>
 | where Text != "[Redacted - see confidential Kuskus for full trace]"
+// NB: intentionally NOT filtered to State == "Completed" — calibration's
+// failure-catch needs the Failed rows (text + FailureReason). Mining excludes
+// Failed rows itself (see rule-mining "Shape clustering").
 // runner-side: drop expanded-dialect rows (marker scan); per row write
 //   scratch/<id>.kql          = Text
 //   manifest[<id>]            = { durationMs, cpuMs, memoryPeakBytes, scannedRows, state, failureReason }

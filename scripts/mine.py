@@ -27,6 +27,12 @@ def mine(findings_doc, manifest, rank_metric="durationMs", top_n=None):
     flagged = {qid(f["file"]) for f in findings_doc.get("findings", [])}
     groups = {}
     for file, sig in (findings_doc.get("shapes") or {}).items():
+        # A Failed query has no meaningful cost and is not a rule candidate;
+        # calibration keeps failed rows for failure-catch, mining drops them
+        # (mirrors calibrate.py's baseline exclusion). Catches semantic failures
+        # that still parse — syntax failures are already absent from `shapes`.
+        if manifest.get(qid(file), {}).get("state") == "Failed":
+            continue
         groups.setdefault(sig, []).append(file)
 
     clusters = []
