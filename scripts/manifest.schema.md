@@ -10,10 +10,10 @@ The fetch step writes two things per query drawn from ADX `QueryCompletion`:
 ```json
 {
   "<id>": {
-    "durationMs":      123.4,        // QueryCompletion.Duration in ms
-    "cpuMs":           456.7,        // QueryCompletion.TotalCPU in ms
-    "memoryPeakBytes": 789012,       // QueryCompletion.MemoryPeak
-    "scannedRows":     3456789,      // ScannedExtentsStatistics.ScannedRowsCount
+    "durationMs":      123.4,        // totimespan(QueryCompletion.Duration) / 1ms  (Duration is a timespan)
+    "cpuMs":           456.7,        // QueryCompletion.TotalCpuMs  (already ms)
+    "memoryPeakBytes": 789012,       // QueryCompletion.MemoryPeak  (long, bytes)
+    "scannedRows":     3456789,      // todynamic(QueryCompletion.ScannedExtentsStatistics).ScannedRowsCount
     "state":           "Completed",  // or "Failed"
     "failureReason":   null          // QueryCompletion.FailureReason when Failed
   }

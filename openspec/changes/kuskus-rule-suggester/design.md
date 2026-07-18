@@ -73,10 +73,22 @@ Everything above the boundary touches raw corpus text and runs only on the runne
 The fetch step (in-boundary, real impl deferred) pulls, per run:
 
 ```
-cluster = kuskus   database = Kuskus   table = QueryCompletion
-project Text, Duration, TotalCPU, MemoryPeak, ScannedExtentsStatistics, State, FailureReason, Timestamp
+// Query text is Customer Content → it exists ONLY on the confidential tier:
+//   cluster  = https://kuskusheadconf.westeurope.kusto.windows.net   (PPE: kuskusseasppe.southeastasia)
+//   database = Kuskus   table = QueryCompletion
+// Column names/types below follow the $$QUERYCOMPLETION emitter
+// (CommandOrQueryLoggingUtils.cs in Azure-Kusto-Service). ponytail: confirm
+// with `QueryCompletion | getschema` on the live cluster before shipping the
+// real fetch — the Kuskus KustoLogs update-policy parser isn't in source.
+QueryCompletion
 | where Timestamp > <watermark>
-| where Text != "[Redacted - see confidential Kuskus for full trace]"
+| where isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
+| project Text,
+          durationMs      = totimespan(Duration) / 1ms,   // Duration is a timespan ('00:00:01.814')
+          cpuMs           = todouble(TotalCpuMs),          // TotalCpuMs — already ms (TotalCpu.TotalMilliseconds)
+          memoryPeakBytes = MemoryPeak,                    // long, bytes
+          scannedRows     = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),  // JSON string
+          State, FailureReason, Timestamp
 // NB: intentionally NOT filtered to State == "Completed" — calibration's
 // failure-catch needs the Failed rows (text + FailureReason). Mining excludes
 // Failed rows itself (see rule-mining "Shape clustering").
@@ -86,6 +98,8 @@ project Text, Duration, TotalCPU, MemoryPeak, ScannedExtentsStatistics, State, F
 ```
 
 Watermark column: `Timestamp` (v1). The cluster/database/table strings and auth (managed identity) live in runner env/secrets — never committed. The confidential full-text tier and a redacted trace view are the same contract against different sources; nothing downstream changes.
+
+**Fetch implementation note (deferred change).** kql-guard is NativeAOT, so the reflection-based `Microsoft.Azure.Kusto.Data` SDK cannot be embedded in the binary — the fetch stays a separate script. The reference connection idiom (`KustoConnectionStringBuilder(uri){ InitialCatalog = db }.WithAadSystemManagedIdentity()` → `KustoClientFactory.CreateCslQueryProvider` → `ExecuteQuery`) is the pattern to mirror, but the runner-side realization should hit the ADX REST API (`POST https://<cluster>/v2/rest/query`) with an IMDS managed-identity bearer token, or shell out to the Kusto CLI — no SDK dependency in kql-guard.
 
 ## Alternatives considered: relaxing the trust boundary
 
