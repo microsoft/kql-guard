@@ -58,7 +58,9 @@ jobs:
             exit 0
           fi
           # Real ADX pull: MI login, watermark-in from the durable blob, fetch.
-          az login --identity --username "$KUSKUS_MI_CLIENT_ID" --output none
+          # az CLI >=2.71 requires --client-id (not the removed --username) for a
+          # user-assigned MI login.
+          az login --identity --client-id "$KUSKUS_MI_CLIENT_ID" --output none
           mkdir -p "$KUSKUS_STATE_DIR"
           az storage blob download \
             --account-name "$KUSKUS_STATE_ACCOUNT" --container-name "$KUSKUS_STATE_CONTAINER" \
