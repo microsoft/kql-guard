@@ -1,6 +1,6 @@
 data "azurerm_client_config" "current" {}
 
-# Storage-account and ACR names are globally unique; a short random suffix avoids
+# Storage-account names are globally unique; a short random suffix avoids
 # collisions without hand-picking names.
 resource "random_string" "suffix" {
   length  = 6
@@ -9,10 +9,11 @@ resource "random_string" "suffix" {
 }
 
 locals {
-  storage_name = "${var.name_prefix}${random_string.suffix.result}"    # <= 24 chars
-  acr_name     = "${var.name_prefix}${random_string.suffix.result}acr" # <= 50 chars
+  storage_name = "${var.name_prefix}${random_string.suffix.result}" # <= 24 chars
   repo_url     = "https://github.com/${var.github_owner}/${var.github_repo}"
   runner_label = "kuskus"
+  # Pinned to the runner-only dependency in scripts/manifest.schema.md.
+  azure_kusto_data_version = "6.0.4"
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -25,21 +26,6 @@ resource "azurerm_user_assigned_identity" "runner" {
   name                = "${var.name_prefix}-mi"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-}
-
-# --- Runner image registry. ---
-resource "azurerm_container_registry" "acr" {
-  name                = local.acr_name
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  sku                 = "Basic"
-  admin_enabled       = false # MI (AcrPull) only
-}
-
-resource "azurerm_role_assignment" "acr_pull" {
-  scope                = azurerm_container_registry.acr.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }
 
 # --- State storage: tfstate (remote state) + kuskus-state (durable watermark). ---
@@ -69,137 +55,114 @@ resource "azurerm_role_assignment" "blob_contributor" {
   principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }
 
-# --- Container Apps environment (Consumption, no VNet). Log Analytics gives the
-#     unattended job debuggable logs (and lets us assert "no query text in logs"). ---
-resource "azurerm_log_analytics_workspace" "logs" {
-  name                = "${var.name_prefix}-logs"
+# --- Networking: egress-only. The runner polls GitHub outbound; nothing needs
+#     inbound, so the NSG denies all inbound and a Standard public IP gives
+#     guaranteed egress (cheaper than a NAT gateway for a single VM). ---
+resource "azurerm_virtual_network" "vnet" {
+  name                = "${var.name_prefix}-vnet"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
+  address_space       = ["10.42.0.0/24"]
 }
 
-resource "azurerm_container_app_environment" "env" {
-  name                       = "${var.name_prefix}-env"
-  resource_group_name        = azurerm_resource_group.rg.name
-  location                   = azurerm_resource_group.rg.location
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
+resource "azurerm_subnet" "runner" {
+  name                 = "runner"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.42.0.0/27"]
 }
 
-# --- The ephemeral runner as a scale-to-zero Container App Job. KEDA's
-#     github-runner scaler starts one replica per queued `kuskus` job; the runner
-#     registers --ephemeral, runs the one job, and exits. ---
-resource "azurerm_container_app_job" "runner" {
-  name                         = "${var.name_prefix}-job"
-  resource_group_name          = azurerm_resource_group.rg.name
-  location                     = azurerm_resource_group.rg.location
-  container_app_environment_id = azurerm_container_app_environment.env.id
+resource "azurerm_network_security_group" "runner" {
+  name                = "${var.name_prefix}-nsg"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
 
-  replica_timeout_in_seconds = var.replica_timeout_seconds
-  replica_retry_limit        = 0 # an ephemeral runner can't retry a consumed job
+  # Deny all inbound (outbound default-allow kept). Break-glass is via Serial
+  # Console / Bastion, neither of which needs an inbound rule here.
+  security_rule {
+    name                       = "deny-all-inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "runner" {
+  subnet_id                 = azurerm_subnet.runner.id
+  network_security_group_id = azurerm_network_security_group.runner.id
+}
+
+resource "azurerm_public_ip" "runner" {
+  name                = "${var.name_prefix}-pip"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_network_interface" "runner" {
+  name                = "${var.name_prefix}-nic"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+
+  ip_configuration {
+    name                          = "primary"
+    subnet_id                     = azurerm_subnet.runner.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.runner.id
+  }
+}
+
+# --- The persistent classic self-hosted runner. cloud-init installs the
+#     toolchain, writes the KUSKUS_* job env, and registers the runner ONCE with
+#     the one-time token (then it holds its own credential — no durable secret).
+#     Registers while the operator has repo admin; survives later admin lapses. ---
+resource "azurerm_linux_virtual_machine" "runner" {
+  name                = "${var.name_prefix}-vm"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  size                = var.vm_size
+  admin_username      = var.admin_username
+
+  network_interface_ids = [azurerm_network_interface.runner.id]
 
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.runner.id]
   }
 
-  registry {
-    server   = azurerm_container_registry.acr.login_server
-    identity = azurerm_user_assigned_identity.runner.id
+  admin_ssh_key {
+    username   = var.admin_username
+    public_key = var.admin_ssh_public_key
   }
 
-  secret {
-    name  = "github-pat"
-    value = var.github_pat
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
   }
 
-  event_trigger_config {
-    parallelism              = 1
-    replica_completion_count = 1
-
-    scale {
-      max_executions              = 1
-      min_executions              = 0
-      polling_interval_in_seconds = 30
-
-      rules {
-        name             = "github-runner"
-        custom_rule_type = "github-runner"
-
-        metadata = {
-          owner                     = var.github_owner
-          runnerScope               = "repo"
-          repos                     = var.github_repo
-          labels                    = local.runner_label
-          targetWorkflowQueueLength = "1"
-        }
-
-        authentication {
-          secret_name       = "github-pat"
-          trigger_parameter = "personalAccessToken"
-        }
-      }
-    }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
   }
 
-  template {
-    container {
-      name   = "runner"
-      image  = "${azurerm_container_registry.acr.login_server}/kuskus-runner:${var.runner_image_tag}"
-      cpu    = var.runner_cpu
-      memory = var.runner_memory
-
-      # Self-hosted runner registration (myoung34/github-runner base uses the PAT
-      # to auto-register an --ephemeral runner and deregister it when the job ends).
-      env {
-        name  = "RUNNER_SCOPE"
-        value = "repo"
-      }
-      env {
-        name  = "REPO_URL"
-        value = local.repo_url
-      }
-      env {
-        name  = "LABELS"
-        value = local.runner_label
-      }
-      env {
-        name  = "EPHEMERAL"
-        value = "true"
-      }
-      env {
-        name  = "DISABLE_AUTO_UPDATE"
-        value = "true"
-      }
-      env {
-        name        = "ACCESS_TOKEN"
-        secret_name = "github-pat"
-      }
-
-      # Pipeline config: consumed by scripts/fetch_corpus.py and the workflow's
-      # `az login --identity` + blob watermark sync.
-      env {
-        name  = "KUSKUS_CLUSTER"
-        value = var.kuskus_cluster
-      }
-      env {
-        name  = "KUSKUS_DATABASE"
-        value = var.kuskus_database
-      }
-      env {
-        name  = "KUSKUS_MI_CLIENT_ID"
-        value = azurerm_user_assigned_identity.runner.client_id
-      }
-      env {
-        name  = "KUSKUS_STATE_ACCOUNT"
-        value = azurerm_storage_account.state.name
-      }
-      env {
-        name  = "KUSKUS_STATE_CONTAINER"
-        value = azurerm_storage_container.kuskus_state.name
-      }
-    }
-  }
-
-  depends_on = [azurerm_role_assignment.acr_pull]
+  custom_data = base64encode(templatefile("${path.module}/runner-init.sh.tftpl", {
+    repo_url                 = local.repo_url
+    registration_token       = var.runner_registration_token
+    labels                   = local.runner_label
+    runner_name              = "${var.name_prefix}-vm"
+    azure_kusto_data_version = local.azure_kusto_data_version
+    kuskus_cluster           = var.kuskus_cluster
+    kuskus_database          = var.kuskus_database
+    mi_client_id             = azurerm_user_assigned_identity.runner.client_id
+    state_account            = azurerm_storage_account.state.name
+    state_container          = azurerm_storage_container.kuskus_state.name
+  }))
 }

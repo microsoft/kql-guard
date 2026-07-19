@@ -1,44 +1,45 @@
 # Kuskus runner infrastructure
 
-Provisions the ephemeral self-hosted runner that powers `.github/workflows/kuskus-report.yml`.
-It is a scale-to-zero **Azure Container App Job**: KEDA's `github-runner` scaler watches the repo's
-Actions queue and starts one replica per queued `kuskus` job; the replica registers an `--ephemeral`
-runner, runs the calibration/mining pipeline against the Kuskus ADX cluster via a managed identity,
-then exits. No idle cost, and the corpus never persists past a run (trust boundary).
+Provisions the persistent self-hosted runner that powers `.github/workflows/kuskus-report.yml`.
+It is a small always-on **Azure VM**, registered once as a classic self-hosted runner (label
+`kuskus`): GitHub dispatches each queued job straight to it, and it runs the calibration/mining
+pipeline against the Kuskus ADX cluster via an attached managed identity. Registering once — with a
+one-time token, no durable GitHub secret — sidesteps the org's 8-day classic-PAT SSO cap and survives
+later repo-admin lapses. The corpus never persists past a run (the workflow scrubs `scratch/`).
 
 See `openspec/changes/kuskus-runner-infra/` for the design and decisions.
 
 ```
 infra/
-  terraform/     # the Azure resources (azurerm)
-  runner-image/  # the runner container image (Dockerfile)
+  terraform/     # the Azure resources (azurerm): MI, storage, networking, the runner VM
 ```
 
 ## What Terraform provisions
 
-Resource group, user-assigned managed identity, ACR (Basic), storage account (`tfstate` +
-`kuskus-state` containers), Log Analytics workspace, a Container Apps environment, and the Container
-App Job with the KEDA `github-runner` scale rule. Role assignments: MI → `AcrPull` on the ACR and
-`Storage Blob Data Contributor` on the `kuskus-state` container.
+Resource group, user-assigned managed identity, storage account (`tfstate` + `kuskus-state`
+containers), a VNet/subnet/NSG (deny-all-inbound) + Standard public IP (egress) + NIC, and the Ubuntu
+runner VM (`Standard_B2s`) whose cloud-init installs the toolchain and registers the runner. Role
+assignment: MI → `Storage Blob Data Contributor` on the `kuskus-state` container (plus, out-of-band,
+viewer on the Kuskus DB).
 
 ## Prerequisites
 
-- `az` (logged in: `az login`), `terraform` >= 1.5, and Docker or access to `az acr build`.
+- `az` (logged in: `az login`), `gh` (logged in, to mint the registration token), `terraform` >= 1.5.
 - Owner/Contributor + User Access Administrator on the target subscription
   **Kusto_PM_Experiments** (`92288740-be22-448e-b3a1-697c0535e005`) — role assignments require it.
-- A GitHub PAT (below) and the Kuskus viewer grant (below).
+- Repo admin on `microsoft/kql-guard` at apply time (to mint the runner registration token).
+- An SSH public key (break-glass) and the Kuskus viewer grant (below).
 
 ## Operator checklist
 
-Top to bottom; each item links to its section. Everything before §6 is one-time.
+Top to bottom; each item links to its section. Everything before §5 is one-time.
 
 - [ ] **Login + target subscription** — `az login && az account set --subscription 92288740-be22-448e-b3a1-697c0535e005`
 - [ ] **§1 Bootstrap remote state** — run the block; keep the printed `STATE_ACCOUNT`.
-- [ ] **§2 GitHub PAT** — create a `repo`-scoped token (SSO-authorized for microsoft); keep it secret.
-- [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (PAT via `TF_VAR_github_pat`).
-- [ ] **§4 `az acr build`** — build + push the runner image.
-- [ ] **§5 Kuskus grant** — send `terraform output -raw kuskus_viewer_grant_command` to the Kuskus team.
-- [ ] **§6 Smoke** — dispatch (dry run); verify the watermark advances and no query text is in any log.
+- [ ] **§2 Runner registration token** — mint a one-time token (valid ~1h); it's consumed at first boot.
+- [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (token + SSH key via `TF_VAR_*`).
+- [ ] **§4 Kuskus grant** — send `terraform output -raw kuskus_viewer_grant_command` to the Kuskus team.
+- [ ] **§5 Smoke** — dispatch (dry run); verify the runner picks it up, the watermark advances, no query text in any log.
 
 ## 1. One-time remote-state bootstrap
 
@@ -63,26 +64,27 @@ echo "STATE_ACCOUNT=$STATE_ACCOUNT"
 echo "init:  terraform init -backend-config=\"storage_account_name=$STATE_ACCOUNT\""
 ```
 
-## 2. GitHub PAT (runner registration + KEDA scaler)
+## 2. Runner registration token (one-time, consumed at first boot)
 
 Repo-level self-hosted runners are permitted on `microsoft/kql-guard` (verified: a repo
-registration-token mint succeeds with repo admin), so **no GitHub App install / org approval is
-needed** — a PAT is enough. Create one of:
+registration-token mint succeeds with repo admin). The VM registers **once** with a one-time token —
+no durable PAT or GitHub App, so the org's 8-day classic-PAT SSO cap doesn't apply. Mint it right
+before `apply` (valid ~1 hour):
 
-- **Classic PAT** — scope **`repo`**. Simplest; works for registration + the KEDA queue poll.
-- **Fine-grained PAT** (repo-scoped to `microsoft/kql-guard`) — **Administration: Read & write**,
-  **Actions: Read-only**, **Metadata: Read-only**.
+```bash
+gh api -X POST repos/microsoft/kql-guard/actions/runners/registration-token --jq .token
+```
 
-Then **Configure SSO → Authorize** the token for the **microsoft** org (required for org-owned repos),
-and store it somewhere safe (it becomes the `github-pat` Container App secret). PR-opening uses the
-workflow's built-in `GITHUB_TOKEN` (the workflow declares `pull-requests: write`), so no extra
-credential is needed there.
+Pass it as `TF_VAR_runner_registration_token` (step 3). It's consumed on first boot; the runner then
+holds its own credential. Recreate the VM ⇒ mint a fresh token. PR-opening uses the workflow's
+built-in `GITHUB_TOKEN` (the workflow declares `pull-requests: write`), so no other GitHub credential
+is needed.
 
-> **Admin-persistence caveat.** An *ephemeral* runner re-registers every run, so the PAT owner must
-> retain repo admin at each run. If your admin is non-persistent (PIM-elevated), prefer a
-> **persistent-VM classic runner**: register it once (`repos/microsoft/kql-guard/actions/runners`)
-> while elevated with `LABELS=kuskus`, and it survives later admin lapses. The workflow
-> (`runs-on: [self-hosted, kuskus]`) is identical either way — only the host differs.
+> **Why a VM, not scale-to-zero.** microsoft caps classic PATs at an 8-day SSO-authorization max, so
+> the ephemeral Container-App-Job design (whose KEDA scaler needs a durable PAT) would require weekly
+> rotation. A persistent VM registered once needs no durable secret. Tradeoff: a small always-on VM
+> (~30 USD/mo) vs. no idle cost. `ponytail:` deallocate-between-weekly-runs is the upgrade path if
+> cost matters (needs a scheduler; not built).
 
 ## 3. Apply Terraform
 
@@ -90,9 +92,11 @@ credential is needed there.
 cd infra/terraform
 terraform init -backend-config="storage_account_name=$STATE_ACCOUNT"  # value printed by step 1
 
-# Secrets/ids via env (never commit tfvars):
+# Inputs via env (never commit tfvars):
 export TF_VAR_subscription_id=92288740-be22-448e-b3a1-697c0535e005
-export TF_VAR_github_pat=<PAT>   # repo scope, SSO-authorized for microsoft
+export TF_VAR_runner_registration_token=$(gh api -X POST \
+  repos/microsoft/kql-guard/actions/runners/registration-token --jq .token)   # step 2 (fresh)
+export TF_VAR_admin_ssh_public_key="$(cat ~/.ssh/id_rsa.pub)"                  # break-glass only
 
 terraform plan
 terraform apply
@@ -102,23 +106,14 @@ Offline schema check (no Azure creds): `terraform init -backend=false && terrafo
 
 Note `terraform output`:
 
-- `acr_name` / `acr_login_server` — for the image build (step 4).
-- `mi_client_id` — for the Kusto grant (step 5).
-- `kuskus_viewer_grant_command` — the ready-to-run grant for step 5.
+- `mi_client_id` — for the Kusto grant (step 4).
+- `kuskus_viewer_grant_command` — the ready-to-run grant for step 4.
+- `vm_name` — the runner VM (Serial Console / Bastion for break-glass; inbound SSH is NSG-denied).
 
-## 4. Build + push the runner image
+After apply, cloud-init needs a few minutes to install the toolchain and register the runner; confirm
+it shows **Online** under repo Settings → Actions → Runners (label `kuskus`).
 
-The image has no .NET SDK; the scanner binary is downloaded per run. Build straight into the ACR:
-
-```bash
-az acr build --registry $(terraform output -raw acr_name) \
-  --image kuskus-runner:latest infra/runner-image
-```
-
-The Dockerfile self-checks its toolchain at build time (`import azure.kusto.data`, `az`, `gh`, `jq`).
-`var.runner_image_tag` defaults to `latest`; pin a digest/tag for production if desired.
-
-## 5. Grant the MI viewer on Kuskus (out-of-band)
+## 4. Grant the MI viewer on Kuskus (out-of-band)
 
 `kuskushead` is an internal cluster not ARM-managed by this subscription, so Terraform can't grant it.
 Send this to the Kuskus team (from `terraform output -raw kuskus_viewer_grant_command`):
@@ -129,15 +124,16 @@ Send this to the Kuskus team (from `terraform output -raw kuskus_viewer_grant_co
 
 Until it lands, the pipeline fails closed at auth / the `getschema` guard — no partial output.
 
-## 6. First-run smoke (manual, not in CI)
+## 5. First-run smoke (manual, not in CI)
 
-Needs the grant from step 5.
+Needs the grant from step 4 and the runner **Online** (step 3).
 
 1. Actions → **Kuskus calibration report** → **Run workflow** (leave `apply` off for a dry run).
-2. KEDA starts a Container App Job replica; the ephemeral runner picks up the job.
+2. The persistent runner picks up the job (no cold start — it's already Online).
 3. Expect: `getschema` guard passes → a bounded window is pulled → calibration + mining reports
    appear in the job summary → the watermark advances in the `kuskus-state` blob.
-4. Confirm **no query text** appears in any log (only aggregate counts / abstracted signatures).
+4. Confirm **no query text** appears in any log (only aggregate counts / abstracted signatures), and
+   that the final scrub step cleared `scratch/`.
 5. Re-run with `apply: true` once the dry run looks right to open the mechanical PRs.
 
 Offline path (no cluster): dispatch with `corpus_path` pointing at a dir that contains `.kql` files
@@ -146,4 +142,5 @@ and a `manifest.json` — the ADX fetch and watermark sync are skipped.
 ## Teardown
 
 `terraform destroy` (from `infra/terraform`) removes everything except the bootstrap state RG/account
-(delete those manually) and the GitHub PAT (revoke it in GitHub).
+(delete those manually). The self-hosted runner entry lingers in GitHub as **Offline** once the VM is
+gone — remove it under repo Settings → Actions → Runners (it also auto-cleans after 14 days idle).

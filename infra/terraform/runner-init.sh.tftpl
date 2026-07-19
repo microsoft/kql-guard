@@ -1,0 +1,59 @@
+#!/bin/bash
+# First-boot provisioning for the persistent Kuskus self-hosted runner (Azure
+# custom_data → cloud-init runs this once, as root). Installs the pipeline
+# toolchain, writes the KUSKUS_* job environment, then registers the Actions
+# runner ONCE — the one-time token is consumed here; the runner then holds its
+# own credential, so there is no durable GitHub secret on the box.
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y --no-install-recommends python3 python3-pip jq ca-certificates curl sudo
+
+# az CLI (MI login + blob watermark sync).
+curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+# gh CLI (release download + PR open).
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+  >/etc/apt/sources.list.d/github-cli.list
+apt-get update
+apt-get install -y --no-install-recommends gh
+
+# The fetch's only runtime dep (pinned to match scripts/manifest.schema.md).
+pip3 install --no-cache-dir --break-system-packages "azure-kusto-data==${azure_kusto_data_version}"
+
+# Dedicated non-root runner user.
+id -u runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
+
+# Actions runner agent (latest; it self-updates to the service-required version
+# on first connect anyway, so an exact pin buys nothing).
+RUNNER_VERSION="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name | sed 's/^v//')"
+install -d -o runner -g runner /opt/actions-runner
+cd /opt/actions-runner
+curl -fsSL -o runner.tar.gz \
+  "https://github.com/actions/runner/releases/download/v$RUNNER_VERSION/actions-runner-linux-x64-$RUNNER_VERSION.tar.gz"
+tar xzf runner.tar.gz && rm runner.tar.gz
+chown -R runner:runner /opt/actions-runner
+
+# KUSKUS_* job environment: the runner exports its .env into every job shell —
+# the persistent-VM equivalent of the old Container App Job container env.
+cat >/opt/actions-runner/.env <<ENV
+KUSKUS_CLUSTER=${kuskus_cluster}
+KUSKUS_DATABASE=${kuskus_database}
+KUSKUS_MI_CLIENT_ID=${mi_client_id}
+KUSKUS_STATE_ACCOUNT=${state_account}
+KUSKUS_STATE_CONTAINER=${state_container}
+ENV
+chown runner:runner /opt/actions-runner/.env
+
+# Register ONCE (consumes the one-time token) and install as a systemd service.
+sudo -u runner ./config.sh --unattended \
+  --url "${repo_url}" \
+  --token "${registration_token}" \
+  --labels "${labels}" \
+  --name "${runner_name}" \
+  --replace
+./svc.sh install runner
+./svc.sh start

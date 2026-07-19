@@ -1,10 +1,11 @@
 name: Kuskus calibration report
 
-# Runs on the ephemeral self-hosted runner (see infra/, kuskus-runner-infra):
-# a scale-to-zero Container App Job with a managed identity that can reach the
-# Kuskus ADX cluster. Aperiodic: weekly cron + manual dispatch. Only aggregate
-# numbers leave the runner; query text stays in the git-ignored scratch/, which
-# is discarded when the ephemeral container exits.
+# Runs on the persistent self-hosted runner (see infra/, kuskus-runner-infra):
+# a small always-on Azure VM with a managed identity that can reach the Kuskus
+# ADX cluster. Aperiodic: weekly cron + manual dispatch. Only aggregate numbers
+# leave the runner; query text stays in the git-ignored scratch/, which the
+# final `if: always()` scrub step deletes so it never persists past a run (the
+# VM's workspace is reused between runs, unlike the old ephemeral container).
 #
 # Deferred integration (shipped as a fail-closed stub): the provider-specific AI
 # suggester. The calibration + weight-review path needs no AI; mining runs
@@ -97,3 +98,10 @@ jobs:
           scripts/run-mining.sh \
             --corpus-path "${{ steps.fetch.outputs.corpus }}" \
             --manifest "${{ steps.fetch.outputs.manifest }}" $APPLY
+
+      - name: Scrub corpus (persistent runner reuses its workspace)
+        if: always()
+        # Trust boundary: query text must not persist past a run. checkout wipes
+        # scratch/ at the NEXT job start, but delete it now so it never lingers
+        # between runs. Never touch a user-supplied corpus_path.
+        run: rm -rf scratch "$KUSKUS_STATE_DIR" || true

@@ -1,26 +1,26 @@
 ## ADDED Requirements
 
-### Requirement: Ephemeral scale-to-zero runner
+### Requirement: Persistent register-once runner
 
-The pipeline SHALL execute on a self-hosted GitHub Actions runner provisioned as event-triggered,
-scale-to-zero serverless compute (an Azure Container App Job scaled by KEDA on queued jobs labeled
-`kuskus`). Each execution SHALL register an ephemeral runner, process exactly one workflow job, and be
-destroyed with its filesystem on completion, so no corpus persists between runs and no compute is
-billed at idle.
+The pipeline SHALL execute on a persistent self-hosted GitHub Actions runner (an always-on Azure VM
+registered once, label `kuskus`) to which GitHub dispatches queued jobs directly. Registration SHALL
+use a one-time token consumed at first boot, so no durable GitHub secret persists on the runner.
+Because the runner's workspace is reused across runs, the workflow SHALL delete the corpus (`scratch/`)
+at the end of every run so no query text persists past a run.
 
-#### Scenario: A queued job starts and disposes a runner
+#### Scenario: A queued job runs on the standing runner
 
-- **WHEN** a `kuskus-report.yml` job labeled `kuskus` is queued and no runner is online
-- **THEN** the KEDA scaler starts one Container App Job execution that registers an ephemeral runner,
-  runs the job, and terminates with its filesystem discarded and no runner left online
+- **WHEN** a `kuskus-report.yml` job labeled `kuskus` is queued
+- **THEN** the already-registered runner picks it up (no cold start), runs the job, and a final
+  always-run step deletes `scratch/` so the corpus does not persist to the next run
 
 ### Requirement: Least-privilege identities
 
 Kuskus access SHALL use a user-assigned managed identity granted read (viewer) on the `Kuskus`
-database only. Runner registration and scaler queue-polling SHALL use a GitHub credential scoped to
-runner administration and Actions read — a `repo`-scoped (or equivalently fine-grained) **PAT**,
-supplied as a Container App secret. Opening pull requests SHALL use the workflow's built-in job token.
-No cluster secret SHALL be stored in the repository.
+database only. Runner registration SHALL use a one-time GitHub registration token, consumed at first
+boot; the runner thereafter holds its own credential and no durable GitHub secret is stored. Opening
+pull requests SHALL use the workflow's built-in job token. No cluster secret SHALL be stored in the
+repository.
 
 #### Scenario: Identities are scoped and separated
 
@@ -28,17 +28,16 @@ No cluster secret SHALL be stored in the repository.
 - **THEN** telemetry auth uses the managed identity (viewer on `Kuskus`), PR creation uses the job's
   `GITHUB_TOKEN`, and neither uses a broad or long-lived secret
 
-### Requirement: Durable watermark across ephemeral runs
+### Requirement: Durable watermark in blob storage
 
 The fetch watermark SHALL persist in durable storage (a blob) so a run resumes where the previous one
-ended despite the runner having no persistent disk. The workflow SHALL restore the watermark before
-fetching and persist it only after a successful fetch; the fetch script SHALL remain file-based and
-unaware of the storage backend.
+ended and survives VM re-creation. The workflow SHALL restore the watermark before fetching and persist
+it only after a successful fetch; the fetch script SHALL remain file-based and unaware of the storage
+backend.
 
-#### Scenario: Watermark survives runner disposal
+#### Scenario: Watermark survives VM re-creation
 
-- **WHEN** a run completes and advances the watermark, then the runner is destroyed and a later run
-  starts on a fresh runner
+- **WHEN** a run completes and advances the watermark, then the VM is recreated and a later run starts
 - **THEN** the later run restores the advanced watermark from the blob and fetches only newer rows
 
 #### Scenario: Failed fetch does not persist the watermark
