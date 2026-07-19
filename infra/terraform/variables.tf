@@ -17,7 +17,7 @@ variable "name_prefix" {
 
 variable "github_owner" {
   type        = string
-  description = "GitHub org/user that owns the repo and the App installation."
+  description = "GitHub org/user that owns the repo the runner registers against."
   default     = "microsoft"
 }
 
@@ -27,20 +27,15 @@ variable "github_repo" {
   default     = "kql-guard"
 }
 
-# --- GitHub App: no defaults (ids identify a specific App; key is a secret). ---
-variable "github_app_id" {
+# --- GitHub auth: a PAT with `repo` scope (repo-level self-hosted runners).
+# Verified viable on microsoft/kql-guard: repo admin + org policy allow repo
+# runners (a registration-token mint succeeded), so no GitHub App install /
+# org approval is needed. The PAT registers the ephemeral runner and drives the
+# KEDA queue poll. Owner must keep repo admin for per-run registration to work;
+# if admin is non-persistent, use a persistent-VM classic runner (registers once).
+variable "github_pat" {
   type        = string
-  description = "GitHub App id (KEDA scaler queue poll + runner registration)."
-}
-
-variable "github_app_installation_id" {
-  type        = string
-  description = "GitHub App installation id on the repo (KEDA scaler)."
-}
-
-variable "github_app_private_key" {
-  type        = string
-  description = "GitHub App private key PEM. Sourced from a CI secret / tfvars; never committed."
+  description = "GitHub PAT (classic: `repo` scope; or fine-grained: repo Administration RW + Actions RO + Metadata RO on kql-guard). Runner registration + KEDA scaler. Sourced from a secret; never committed."
   sensitive   = true
 }
 

@@ -1,5 +1,5 @@
 # Terraform working files — never commit state, provider binaries, or tfvars
-# (tfvars carry the subscription id and the GitHub App private key).
+# (tfvars carry the subscription id and the GitHub PAT).
 .terraform/
 *.tfstate
 *.tfstate.*

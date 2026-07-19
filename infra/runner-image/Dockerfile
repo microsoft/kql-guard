@@ -1,8 +1,8 @@
 # Ephemeral self-hosted runner for the Kuskus calibration/mining pipeline.
 #
-# Base = myoung34/github-runner: it wraps the official actions runner and already
-# handles GitHub App auth + `--ephemeral` registration from APP_ID / APP_LOGIN /
-# APP_PRIVATE_KEY, so we don't hand-roll JWT minting. We add only the pipeline
+# Base = myoung34/github-runner: it wraps the official actions runner and handles
+# PAT auth + `--ephemeral` registration from ACCESS_TOKEN, so we don't hand-roll
+# the registration-token dance. We add only the pipeline
 # toolchain. NO .NET SDK: the scanner is a shipped NativeAOT binary pulled per
 # run via `gh release download kql-guard-linux-x64` (release.yml publishes it),
 # so this image never rebuilds when kql-guard changes.

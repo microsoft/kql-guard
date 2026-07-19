@@ -14,7 +14,7 @@ adapts the workflow to the ephemeral model. The fetch it runs is `kuskus-corpus-
 ```
 GitHub workflow (kuskus-report.yml — weekly cron / dispatch)
    └─ job runs-on: [self-hosted, kuskus]        ← queued, no runner online
-        │  KEDA github-runner scaler (polls the Actions queue via the GitHub App)
+        │  KEDA github-runner scaler (polls the Actions queue with the PAT)
         ▼
 Azure Container App Job (Consumption, scale-to-zero)
    • pulls the runner image from ACR
@@ -42,17 +42,24 @@ static egress IP, or a private endpoint.
 **3. Identity split — two identities, each least-privilege.**
 - **Azure user-assigned MI**, attached to the Container App Job → AAD token for Kusto. Granted
   **viewer** on `Kuskus` only.
-- **GitHub App** (`administration:write` for runner registration + `actions:read` for the scaler's
-  queue poll), installed on the repo → the KEDA scaler + the ephemeral runner registration. Private
-  key stored as a Container App secret.
+- **GitHub PAT** (`repo` scope, or fine-grained repo Administration RW + Actions RO + Metadata RO) →
+  the KEDA scaler's queue poll + the ephemeral runner registration. Stored as a Container App secret.
 - **PR-open** uses the workflow job's built-in `GITHUB_TOKEN` (`kuskus-report.yml` already declares
   `pull-requests: write`) — no third credential.
-Rejected: a PAT for the scaler (expires → rotation toil; broader scope). A GitHub App has no expiry
-and finer scope.
+
+> **2026-07-19 pivot — GitHub App → PAT.** Originally a GitHub App (no expiry, finer scope). But
+> installing an App on the `microsoft` org needs org-owner approval, which stalled indefinitely. A
+> capability probe then **proved repo-level self-hosted runners are already permitted on
+> `microsoft/kql-guard`** (a repo runner-registration-token mint succeeded with repo admin), so a
+> plain `repo`-scoped PAT registers the runner and drives the scaler with no org approval. Tradeoff we
+> accept: the PAT expires (rotation toil) and an *ephemeral* runner re-registers each run, so the PAT
+> owner must retain repo admin at run time. If admin is non-persistent (PIM), the documented fallback
+> is a **persistent-VM classic runner** — registered once while elevated, it survives later lapses;
+> the workflow (`runs-on: [self-hosted, kuskus]`) is unchanged either way.
 
 **4. Runner image: lean, no .NET SDK.** Base = `myoung34/github-runner` (it wraps the official Actions
-runner and already handles GitHub App auth + `--ephemeral` registration from `APP_ID`/`APP_LOGIN`/
-`APP_PRIVATE_KEY`, so we don't hand-roll JWT minting); add `az`, `python3` +
+runner and handles PAT auth + `--ephemeral` registration from `ACCESS_TOKEN`, so we don't hand-roll
+the registration-token dance); add `az`, `python3` +
 `azure-kusto-data`, `gh`, `jq`. The scanner is pulled at job time via
 `gh release download kql-guard-linux-x64` (`release.yml` already publishes it), so the image needs no
 .NET SDK and no rebuild when kql-guard changes — and calibration/mining run against the **shipped**
@@ -78,7 +85,7 @@ boundary-critical code storage-SDK-free and testable; durability is two `az` lin
 **7. IaC: Terraform, remote state, nothing hardcoded.** `azurerm` provider only — the Container App
 Job, KEDA `github-runner` scale rule, ACR, storage, MI and role assignments are all native in
 azurerm 4.x, so the originally-planned `azapi` would be dead config and is dropped. Subscription
-id, region, MI client-id, GitHub owner/repo, and GitHub App ids are variables (CI secrets / tfvars),
+id, region, MI client-id, GitHub owner/repo, and the GitHub PAT are variables (CI secrets / tfvars),
 never committed. Remote state lives in the `tfstate` container (`azurerm` backend); the state storage
 account is the one chicken-and-egg — created once by a documented `az storage account create` (a
 bootstrap module would be more code than the problem). Check = `terraform fmt -check` + `validate` +
@@ -100,7 +107,7 @@ notes; the pipeline fails closed (auth / getschema) until it lands.
 | Storage account (LRS) | `tfstate` (remote state) + `kuskus-state` (watermark blob) |
 | Log Analytics workspace | container logs for the unattended job (assert "no query text in logs") |
 | Container Apps environment | Consumption, no VNet |
-| Container App Job | KEDA `github-runner` event trigger, `--ephemeral` runner, MI attached, image from ACR, GitHub App key as a secret |
+| Container App Job | KEDA `github-runner` event trigger, `--ephemeral` runner, MI attached, image from ACR, GitHub PAT as a secret |
 | Role assignments | AcrPull (MI → ACR); Storage Blob Data Contributor (MI → `kuskus-state`) |
 
 ## Layout
@@ -109,7 +116,7 @@ notes; the pipeline fails closed (auth / getschema) until it lands.
 infra/
   terraform/     main.tf variables.tf providers.tf backend.tf outputs.tf
   runner-image/  Dockerfile
-  README.md      # state bootstrap, Kuskus viewer-grant request, GitHub App setup, apply + build steps
+  README.md      # state bootstrap, Kuskus viewer-grant request, GitHub PAT setup, apply + build steps
 ```
 
 ## Testability / verification
@@ -130,7 +137,7 @@ infra/
 | `subscription_id` | Terraform var (the target subscription) |
 | `location` | `westeurope` (co-located with the cluster) |
 | `github_owner` / `github_repo` | `microsoft` / `kql-guard` |
-| GitHub App id / installation id / private key | KEDA scaler + runner registration (Container App secret) |
+| GitHub PAT (`repo` scope) | KEDA scaler + runner registration (Container App secret) |
 | `KUSKUS_CLUSTER` (job env) | `https://kuskushead.westeurope.kusto.windows.net` (flip to `…conf` later) |
 | `KUSKUS_STATE_DIR` (job env) | local dir synced to/from the `kuskus-state` blob |
 

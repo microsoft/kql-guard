@@ -22,9 +22,10 @@ persistent runner would idle-burn cost and need patching. This change provisions
   **durable-watermark sync** (`az storage blob download`/`upload` around the fetch on the
   `kuskus-state` container); obtain the scanner via **`gh release download kql-guard-linux-x64`**
   (no build step).
-- **Auth**: a **GitHub App** (scoped `administration:write` + `actions:read`) drives the KEDA scaler
-  and the ephemeral runner registration; its private key is a **Container App secret**. PR-open keeps
-  using the workflow job's built-in `GITHUB_TOKEN`.
+- **Auth**: a **GitHub PAT** (`repo` scope) drives the KEDA scaler and the ephemeral runner
+  registration; it is a **Container App secret**. (Was a GitHub App; pivoted to a PAT after an App
+  install on the `microsoft` org stalled on org approval and repo-level runners were proven already
+  permitted — see design decision 3.) PR-open keeps using the workflow job's built-in `GITHUB_TOKEN`.
 - **Document the one out-of-band step**: the MI's read on Kuskus is a
   `.add database Kuskus viewers ('aadapp=<mi-client-id>')` request to the Kuskus team — Terraform
   cannot grant it (the cluster is not ARM-managed by this subscription).
@@ -43,7 +44,7 @@ persistent runner would idle-burn cost and need patching. This change provisions
   build.
 - **Cost**: pay-per-run compute (scale-to-zero) + a Basic ACR + a small LRS storage account;
   effectively free at idle.
-- **Security**: the MI is viewer-only on one database; the GitHub App is repo-scoped; PR-open uses
+- **Security**: the MI is viewer-only on one database; the GitHub PAT is `repo`-scoped; PR-open uses
   the job token; secrets are Container App secrets (no repo secrets, no Key Vault yet); subscription
   and identity ids are Terraform variables, never committed. The ephemeral filesystem means the
   corpus never persists past a run.

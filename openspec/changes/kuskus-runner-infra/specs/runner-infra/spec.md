@@ -17,9 +17,10 @@ billed at idle.
 ### Requirement: Least-privilege identities
 
 Kuskus access SHALL use a user-assigned managed identity granted read (viewer) on the `Kuskus`
-database only. Runner registration and scaler queue-polling SHALL use a GitHub App scoped to runner
-administration and Actions read. Opening pull requests SHALL use the workflow's built-in job token. No
-long-lived personal access token and no repository-stored cluster secret SHALL be required.
+database only. Runner registration and scaler queue-polling SHALL use a GitHub credential scoped to
+runner administration and Actions read — a `repo`-scoped (or equivalently fine-grained) **PAT**,
+supplied as a Container App secret. Opening pull requests SHALL use the workflow's built-in job token.
+No cluster secret SHALL be stored in the repository.
 
 #### Scenario: Identities are scoped and separated
 

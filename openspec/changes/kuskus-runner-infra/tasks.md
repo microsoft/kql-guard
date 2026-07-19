@@ -1,6 +1,6 @@
 ## 1. Terraform skeleton + state backend
 
-- [x] 1.1 Create `infra/terraform/{providers,variables,backend,main,outputs}.tf`: `azurerm` + `azapi` providers; `subscription_id`, `location` (default `westeurope`), `github_owner`, `github_repo`, and GitHub App id/installation-id/private-key variables — **no defaults for ids or secrets**. `terraform fmt` + `terraform init` + `terraform validate` pass.
+- [x] 1.1 Create `infra/terraform/{providers,variables,backend,main,outputs}.tf`: `azurerm` + `azapi` providers; `subscription_id`, `location` (default `westeurope`), `github_owner`, `github_repo`, and a GitHub PAT variable (`github_pat`, sensitive) — **no defaults for ids or secrets**. `terraform fmt` + `terraform init` + `terraform validate` pass.
 - [x] 1.2 Document and run the one-time state bootstrap in `infra/README.md`: `az group create` (state RG) + `az storage account create` + `az storage container create --name tfstate`; point `backend.tf` at it and `terraform init` (migrate to remote state). ponytail: one `az` command, not a bootstrap module.
 
 ## 2. Core resources
@@ -17,12 +17,12 @@
 ## 4. Container Apps environment + Job + KEDA scaler
 
 - [x] 4.1 `azurerm_container_app_environment` (Consumption, no VNet).
-- [x] 4.2 `azurerm_container_app_job`: image from ACR, MI attached, `KUSKUS_*` env, GitHub App private key as a secret; `event_trigger_config` with a `github-runner` custom scale rule (owner/repo, `runnerScope: repo`, labels `kuskus`, GitHub App auth), parallelism 1, replica timeout sized to a full run.
-- [ ] 4.3 `terraform plan` shows the job + scale rule; document GitHub App creation/installation in `infra/README.md`.
+- [x] 4.2 `azurerm_container_app_job`: image from ACR, MI attached, `KUSKUS_*` env, GitHub PAT as a secret; `event_trigger_config` with a `github-runner` custom scale rule (owner/repo, `runnerScope: repo`, labels `kuskus`, PAT auth via `personalAccessToken`), parallelism 1, replica timeout sized to a full run.
+- [ ] 4.3 `terraform plan` shows the job + scale rule; document GitHub PAT creation in `infra/README.md`.
 
-## 5. GitHub App + secrets
+## 5. GitHub PAT + secrets
 
-- [x] 5.1 Document GitHub App creation in `infra/README.md` (permissions `administration:write`, `actions:read`; installed on the repo); store app id / installation id / private key as Container App secrets (Terraform vars sourced from CI secrets, never committed).
+- [x] 5.1 Document GitHub PAT creation in `infra/README.md` (classic `repo` scope, or fine-grained Administration RW + Actions RO + Metadata RO; SSO-authorized for microsoft); store the PAT as a Container App secret (Terraform var sourced from a CI secret, never committed).
 - [x] 5.2 Confirm PR-open uses the workflow `GITHUB_TOKEN` (the workflow already declares `pull-requests: write`) — no extra secret.
 
 ## 6. Workflow restructure (`kuskus-report.yml`)
@@ -34,7 +34,7 @@
 
 ## 7. Docs + validation
 
-- [x] 7.1 `infra/README.md`: state bootstrap, GitHub App setup, the `.add database Kuskus viewers ('aadapp=<mi-client-id>;<tenant>')` grant request to the Kuskus team, `terraform apply`, `az acr build`, and the first-dispatch smoke procedure.
+- [x] 7.1 `infra/README.md`: state bootstrap, GitHub PAT setup, the `.add database Kuskus viewers ('aadapp=<mi-client-id>;<tenant>')` grant request to the Kuskus team, `terraform apply`, `az acr build`, and the first-dispatch smoke procedure.
 - [ ] 7.2 `terraform fmt -check` + `terraform validate` green; `terraform plan` reviewed against the target subscription.
 - [x] 7.3 `openspec validate kuskus-runner-infra --strict` passes.
 - [ ] 7.4 Manual smoke (documented, not in CI): dispatch → KEDA starts the job → ephemeral runner → getschema guard + fetch + calibrate/mine → watermark advances in the blob → no query text in any log.

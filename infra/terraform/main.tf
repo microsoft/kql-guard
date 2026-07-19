@@ -109,8 +109,8 @@ resource "azurerm_container_app_job" "runner" {
   }
 
   secret {
-    name  = "github-app-key"
-    value = var.github_app_private_key
+    name  = "github-pat"
+    value = var.github_pat
   }
 
   event_trigger_config {
@@ -132,13 +132,11 @@ resource "azurerm_container_app_job" "runner" {
           repos                     = var.github_repo
           labels                    = local.runner_label
           targetWorkflowQueueLength = "1"
-          applicationID             = var.github_app_id
-          installationID            = var.github_app_installation_id
         }
 
         authentication {
-          secret_name       = "github-app-key"
-          trigger_parameter = "appKey"
+          secret_name       = "github-pat"
+          trigger_parameter = "personalAccessToken"
         }
       }
     }
@@ -151,8 +149,8 @@ resource "azurerm_container_app_job" "runner" {
       cpu    = var.runner_cpu
       memory = var.runner_memory
 
-      # Self-hosted runner registration (myoung34/github-runner base handles the
-      # App -> installation -> registration-token dance from these).
+      # Self-hosted runner registration (myoung34/github-runner base uses the PAT
+      # to auto-register an --ephemeral runner and deregister it when the job ends).
       env {
         name  = "RUNNER_SCOPE"
         value = "repo"
@@ -174,16 +172,8 @@ resource "azurerm_container_app_job" "runner" {
         value = "true"
       }
       env {
-        name  = "APP_ID"
-        value = var.github_app_id
-      }
-      env {
-        name  = "APP_LOGIN"
-        value = var.github_owner
-      }
-      env {
-        name        = "APP_PRIVATE_KEY"
-        secret_name = "github-app-key"
+        name        = "ACCESS_TOKEN"
+        secret_name = "github-pat"
       }
 
       # Pipeline config: consumed by scripts/fetch_corpus.py and the workflow's

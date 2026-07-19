@@ -26,7 +26,7 @@ App Job with the KEDA `github-runner` scale rule. Role assignments: MI → `AcrP
 - `az` (logged in: `az login`), `terraform` >= 1.5, and Docker or access to `az acr build`.
 - Owner/Contributor + User Access Administrator on the target subscription
   **Kusto_PM_Experiments** (`92288740-be22-448e-b3a1-697c0535e005`) — role assignments require it.
-- A GitHub App (below) and the Kuskus viewer grant (below).
+- A GitHub PAT (below) and the Kuskus viewer grant (below).
 
 ## Operator checklist
 
@@ -34,8 +34,8 @@ Top to bottom; each item links to its section. Everything before §6 is one-time
 
 - [ ] **Login + target subscription** — `az login && az account set --subscription 92288740-be22-448e-b3a1-697c0535e005`
 - [ ] **§1 Bootstrap remote state** — run the block; keep the printed `STATE_ACCOUNT`.
-- [ ] **§2 GitHub App** — create + install on `microsoft/kql-guard`; keep App ID, Installation ID, `.pem`.
-- [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (App ids/key via `TF_VAR_*`).
+- [ ] **§2 GitHub PAT** — create a `repo`-scoped token (SSO-authorized for microsoft); keep it secret.
+- [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (PAT via `TF_VAR_github_pat`).
 - [ ] **§4 `az acr build`** — build + push the runner image.
 - [ ] **§5 Kuskus grant** — send `terraform output -raw kuskus_viewer_grant_command` to the Kuskus team.
 - [ ] **§6 Smoke** — dispatch (dry run); verify the watermark advances and no query text is in any log.
@@ -63,17 +63,26 @@ echo "STATE_ACCOUNT=$STATE_ACCOUNT"
 echo "init:  terraform init -backend-config=\"storage_account_name=$STATE_ACCOUNT\""
 ```
 
-## 2. GitHub App (runner registration + KEDA scaler)
+## 2. GitHub PAT (runner registration + KEDA scaler)
 
-1. Create a GitHub App (org or personal). Disable Webhooks.
-2. Repository permissions: **Actions: Read-only**, **Administration: Read & write**,
-   **Metadata: Read-only**.
-3. Generate a private key (`.pem`) and note the **App ID**.
-4. Install the App on `microsoft/kql-guard`; note the **Installation ID** (in the installation URL).
+Repo-level self-hosted runners are permitted on `microsoft/kql-guard` (verified: a repo
+registration-token mint succeeds with repo admin), so **no GitHub App install / org approval is
+needed** — a PAT is enough. Create one of:
 
-The App authenticates both the KEDA scaler (queue poll) and the runner's ephemeral registration.
-PR-opening uses the workflow's built-in `GITHUB_TOKEN` (the workflow declares `pull-requests: write`),
-so no extra credential is needed there.
+- **Classic PAT** — scope **`repo`**. Simplest; works for registration + the KEDA queue poll.
+- **Fine-grained PAT** (repo-scoped to `microsoft/kql-guard`) — **Administration: Read & write**,
+  **Actions: Read-only**, **Metadata: Read-only**.
+
+Then **Configure SSO → Authorize** the token for the **microsoft** org (required for org-owned repos),
+and store it somewhere safe (it becomes the `github-pat` Container App secret). PR-opening uses the
+workflow's built-in `GITHUB_TOKEN` (the workflow declares `pull-requests: write`), so no extra
+credential is needed there.
+
+> **Admin-persistence caveat.** An *ephemeral* runner re-registers every run, so the PAT owner must
+> retain repo admin at each run. If your admin is non-persistent (PIM-elevated), prefer a
+> **persistent-VM classic runner**: register it once (`repos/microsoft/kql-guard/actions/runners`)
+> while elevated with `LABELS=kuskus`, and it survives later admin lapses. The workflow
+> (`runs-on: [self-hosted, kuskus]`) is identical either way — only the host differs.
 
 ## 3. Apply Terraform
 
@@ -83,9 +92,7 @@ terraform init -backend-config="storage_account_name=$STATE_ACCOUNT"  # value pr
 
 # Secrets/ids via env (never commit tfvars):
 export TF_VAR_subscription_id=92288740-be22-448e-b3a1-697c0535e005
-export TF_VAR_github_app_id=<APP_ID>
-export TF_VAR_github_app_installation_id=<INSTALLATION_ID>
-export TF_VAR_github_app_private_key="$(cat path/to/app.private-key.pem)"
+export TF_VAR_github_pat=<PAT>   # repo scope, SSO-authorized for microsoft
 
 terraform plan
 terraform apply
@@ -139,4 +146,4 @@ and a `manifest.json` — the ADX fetch and watermark sync are skipped.
 ## Teardown
 
 `terraform destroy` (from `infra/terraform`) removes everything except the bootstrap state RG/account
-(delete those manually) and the GitHub App (delete in GitHub).
+(delete those manually) and the GitHub PAT (revoke it in GitHub).
