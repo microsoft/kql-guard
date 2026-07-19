@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Fetch a QueryCompletion corpus into scratch/<id>.kql + manifest.json.
 #
-# The real ADX fetch is deferred to a later change (it needs Kuskus cluster
-# access + auth wiring). This stub fails closed so the pipeline can never
-# silently run on an empty corpus. For testing/local runs, pass a
-# pre-materialized corpus with --corpus-path <dir> --manifest <file>; the stub
-# then just validates and passes those through.
+# Two modes:
+#   --corpus-path <dir> --manifest <file>  validate + pass a pre-materialized
+#       corpus through (the offline test/e2e seam; contacts no cluster).
+#   (no args)  run the real ADX fetch (scripts/fetch_corpus.py) using the
+#       KUSKUS_* runner environment. The fetch is a script, not binary code,
+#       because the Kusto SDK is reflection-based and cannot live in the
+#       NativeAOT binary. See scripts/manifest.schema.md for the contract.
 set -euo pipefail
 
 CORPUS_PATH=""; MANIFEST=""
@@ -18,11 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$CORPUS_PATH" ]]; then
-  echo "fetch-corpus: real ADX fetch not yet implemented." >&2
-  echo "  Provide a pre-materialized corpus for now:" >&2
-  echo "    fetch-corpus.sh --corpus-path <dir of .kql> --manifest <manifest.json>" >&2
-  echo "  See scripts/manifest.schema.md for the manifest contract." >&2
-  exit 1
+  exec python3 "$(dirname "$0")/fetch_corpus.py"   # real fetch; config from KUSKUS_* env
 fi
 [[ -d "$CORPUS_PATH" ]] || { echo "corpus dir not found: $CORPUS_PATH" >&2; exit 1; }
 [[ -f "$MANIFEST"    ]] || { echo "manifest not found: $MANIFEST" >&2; exit 1; }

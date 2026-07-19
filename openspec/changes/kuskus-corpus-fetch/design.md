@@ -63,7 +63,9 @@ non-zero and prints the live column list so the operator can reconcile the query
 runtime resolution of the one contract item unverifiable from source.
 
 **6. Watermark.** Runner-local file `${KUSKUS_STATE_DIR}/watermark.txt`, ISO-8601 UTC, outside the
-repo. Absent → `now - <BOOTSTRAP>` (default 7d). Advanced **only** after `scratch/` and
+repo. Absent → `read_watermark` returns `None` and `build_query` emits `ago(<BOOTSTRAP>)` (default 7d)
+as the lower bound, so the duration stays in KQL (no Python duration parsing). Advanced **only** after
+`scratch/` and
 `manifest.json` are fully written; on any failure it is left untouched and partial `scratch/`
 output is removed, so a rerun re-pulls the same window cleanly. The script stays file-based and pure
 (testable); because the runner is **ephemeral** (no persistent disk), the workflow persists this file

@@ -159,6 +159,7 @@ then echo "ok: --shapes signatures"; else echo "FAIL: --shapes signatures"; fail
 # --- Kuskus calibration pipeline self-checks (Python stdlib + shell) ---
 echo "--- calibration scripts ---"
 python3 scripts/test_calibrate.py     || fails=$((fails+1))
+python3 scripts/test_fetch_corpus.py  || fails=$((fails+1))
 bash    scripts/test_leak_guard.sh    || fails=$((fails+1))
 bash    scripts/test_propose_weight.sh || fails=$((fails+1))
 python3 scripts/test_mine.py          || fails=$((fails+1))
