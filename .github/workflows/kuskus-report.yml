@@ -1,56 +1,99 @@
 name: Kuskus calibration report
 
-# Runs on a self-hosted runner that has Kuskus (confidential ADX) access.
-# Aperiodic: weekly cron + manual dispatch. Only aggregate numbers leave the
-# runner; query text stays in the git-ignored scratch/.
+# Runs on the ephemeral self-hosted runner (see infra/, kuskus-runner-infra):
+# a scale-to-zero Container App Job with a managed identity that can reach the
+# Kuskus ADX cluster. Aperiodic: weekly cron + manual dispatch. Only aggregate
+# numbers leave the runner; query text stays in the git-ignored scratch/, which
+# is discarded when the ephemeral container exits.
 #
-# Deferred integrations (shipped as fail-closed stubs): the real QueryCompletion
-# fetch (scripts/fetch-corpus.sh) and the provider-specific AI suggester. The
-# calibration + weight-review path needs no AI; the pipeline runs end-to-end
-# today against a supplied corpus_path via scripts/mock-suggester.py.
+# Deferred integration (shipped as a fail-closed stub): the provider-specific AI
+# suggester. The calibration + weight-review path needs no AI; mining runs
+# end-to-end via scripts/mock-suggester.py. The QueryCompletion fetch is live
+# (scripts/fetch_corpus.py). calibrate + mine share ONE job so the corpus is
+# fetched once and the watermark advances once (no double-fetch / race).
 on:
   workflow_dispatch:
     inputs:
       apply:
-        description: "Open mechanical weight PRs (else dry-run)"
+        description: "Open mechanical weight + new-rule PRs (else dry-run)"
         type: boolean
         default: false
+      corpus_path:
+        description: "Optional pre-materialized corpus dir (offline seam; skips the ADX fetch)"
+        type: string
+        default: ""
   schedule:
-    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  calibrate:
+  run:
     runs-on: [self-hosted, kuskus]
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download shipped kql-guard scanner
+        run: |
+          # KUSKUS_STATE_DIR is set here (not job env): the `runner` context is
+          # unavailable at job level, and $RUNNER_TEMP is only a step shell var.
+          echo "KUSKUS_STATE_DIR=$RUNNER_TEMP/kuskus-state" >> "$GITHUB_ENV"
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern 'kql-guard-linux-x64' --dir . --clobber
+          chmod +x kql-guard-linux-x64
+          echo "KQLGUARD_BIN=$PWD/kql-guard-linux-x64" >> "$GITHUB_ENV"
+
       - name: Fetch corpus + cost manifest
-        run: scripts/fetch-corpus.sh   # real fetch (deferred); fails closed until implemented
+        id: fetch
+        run: |
+          if [[ -n "${{ inputs.corpus_path }}" ]]; then
+            echo "corpus=${{ inputs.corpus_path }}" >> "$GITHUB_OUTPUT"
+            echo "manifest=${{ inputs.corpus_path }}/manifest.json" >> "$GITHUB_OUTPUT"
+            echo "offline seam: using supplied corpus, skipping ADX fetch"
+            exit 0
+          fi
+          # Real ADX pull: MI login, watermark-in from the durable blob, fetch.
+          az login --identity --username "$KUSKUS_MI_CLIENT_ID" --output none
+          mkdir -p "$KUSKUS_STATE_DIR"
+          az storage blob download \
+            --account-name "$KUSKUS_STATE_ACCOUNT" --container-name "$KUSKUS_STATE_CONTAINER" \
+            --name watermark.txt --file "$KUSKUS_STATE_DIR/watermark.txt" \
+            --auth-mode login --no-progress --only-show-errors \
+            || echo "no prior watermark; fetch will bootstrap"
+          scripts/fetch-corpus.sh
+          echo "corpus=scratch" >> "$GITHUB_OUTPUT"
+          echo "manifest=manifest.json" >> "$GITHUB_OUTPUT"
+
+      - name: Persist watermark
+        # Gated on fetch-step success (success() covers all prior steps) and real
+        # mode, so a failed fetch never advances the durable watermark.
+        if: success() && inputs.corpus_path == ''
+        run: |
+          az storage blob upload \
+            --account-name "$KUSKUS_STATE_ACCOUNT" --container-name "$KUSKUS_STATE_CONTAINER" \
+            --name watermark.txt --file "$KUSKUS_STATE_DIR/watermark.txt" \
+            --overwrite --auth-mode login --no-progress --only-show-errors
+
       - name: Run calibration
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           APPLY=""
           if [[ "${{ inputs.apply }}" == "true" ]]; then APPLY="--apply"; fi
-          scripts/run-calibration.sh --corpus-path scratch --manifest manifest.json $APPLY
-      - name: Publish report to job summary
+          scripts/run-calibration.sh \
+            --corpus-path "${{ steps.fetch.outputs.corpus }}" \
+            --manifest "${{ steps.fetch.outputs.manifest }}" $APPLY
+
+      - name: Publish calibration report to job summary
         if: always()
         run: cat report.md >> "$GITHUB_STEP_SUMMARY" || true
 
-  mine:
-    runs-on: [self-hosted, kuskus]
-    needs: calibrate
-    steps:
-      - uses: actions/checkout@v4
-      - name: Fetch corpus + cost manifest
-        run: scripts/fetch-corpus.sh   # real fetch (deferred); fails closed until implemented
       - name: Mine shapes + draft/validate/publish new-rule candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           APPLY=""
           if [[ "${{ inputs.apply }}" == "true" ]]; then APPLY="--apply"; fi
-          scripts/run-mining.sh --corpus-path scratch --manifest manifest.json $APPLY
+          scripts/run-mining.sh \
+            --corpus-path "${{ steps.fetch.outputs.corpus }}" \
+            --manifest "${{ steps.fetch.outputs.manifest }}" $APPLY

@@ -21,15 +21,21 @@ done
 : "${CORPUS:?--corpus-path required}"; : "${MANIFEST:?--manifest required}"
 
 DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
-BIN="bin/Debug/net10.0/kql-guard.dll"
 
-# 1. Fetch (stub validates/passes through a supplied corpus).
+# 1. Validate/pass-through the corpus materialized by the fetch step.
 scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"
 
 # 2. Analyze with shapes. A nonzero exit on query errors is expected; the JSON
-#    report is still written.
-[[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
-"$DOTNET" "$BIN" "$CORPUS" --format json --shapes > findings.json || true
+#    report is still written. On the runner, KQLGUARD_BIN points at the
+#    downloaded NativeAOT binary (no .NET SDK); locally we build + run the dll.
+if [[ -n "${KQLGUARD_BIN:-}" ]]; then
+  SCANNER=("$KQLGUARD_BIN")
+else
+  BIN="bin/Debug/net10.0/kql-guard.dll"
+  [[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
+  SCANNER=("$DOTNET" "$BIN")
+fi
+"${SCANNER[@]}" "$CORPUS" --format json --shapes > findings.json || true
 
 # 3. Mine -> candidates (aggregate summary to the job summary; no query text).
 {

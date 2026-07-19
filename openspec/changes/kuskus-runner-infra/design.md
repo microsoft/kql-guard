@@ -50,7 +50,9 @@ static egress IP, or a private endpoint.
 Rejected: a PAT for the scaler (expires → rotation toil; broader scope). A GitHub App has no expiry
 and finer scope.
 
-**4. Runner image: lean, no .NET SDK.** Base = the GitHub Actions runner; add `az`, `python3` +
+**4. Runner image: lean, no .NET SDK.** Base = `myoung34/github-runner` (it wraps the official Actions
+runner and already handles GitHub App auth + `--ephemeral` registration from `APP_ID`/`APP_LOGIN`/
+`APP_PRIVATE_KEY`, so we don't hand-roll JWT minting); add `az`, `python3` +
 `azure-kusto-data`, `gh`, `jq`. The scanner is pulled at job time via
 `gh release download kql-guard-linux-x64` (`release.yml` already publishes it), so the image needs no
 .NET SDK and no rebuild when kql-guard changes — and calibration/mining run against the **shipped**
@@ -73,7 +75,9 @@ MI-authenticated). The fetch still advances the local file only on a fully-writt
 upload is gated on that step's success, preserving fail-closed semantics. This keeps the
 boundary-critical code storage-SDK-free and testable; durability is two `az` lines.
 
-**7. IaC: Terraform, remote state, nothing hardcoded.** `azurerm` + `azapi` providers. Subscription
+**7. IaC: Terraform, remote state, nothing hardcoded.** `azurerm` provider only — the Container App
+Job, KEDA `github-runner` scale rule, ACR, storage, MI and role assignments are all native in
+azurerm 4.x, so the originally-planned `azapi` would be dead config and is dropped. Subscription
 id, region, MI client-id, GitHub owner/repo, and GitHub App ids are variables (CI secrets / tfvars),
 never committed. Remote state lives in the `tfstate` container (`azurerm` backend); the state storage
 account is the one chicken-and-egg — created once by a documented `az storage account create` (a
@@ -94,6 +98,7 @@ notes; the pipeline fails closed (auth / getschema) until it lands.
 | User-assigned MI | Kusto auth (viewer on `Kuskus`, granted out-of-band) |
 | ACR (Basic) | runner image registry |
 | Storage account (LRS) | `tfstate` (remote state) + `kuskus-state` (watermark blob) |
+| Log Analytics workspace | container logs for the unattended job (assert "no query text in logs") |
 | Container Apps environment | Consumption, no VNet |
 | Container App Job | KEDA `github-runner` event trigger, `--ephemeral` runner, MI attached, image from ACR, GitHub App key as a secret |
 | Role assignments | AcrPull (MI → ACR); Storage Blob Data Contributor (MI → `kuskus-state`) |

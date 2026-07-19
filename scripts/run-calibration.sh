@@ -15,15 +15,22 @@ while [[ $# -gt 0 ]]; do
 done
 : "${CORPUS:?--corpus-path required}"; : "${MANIFEST:?--manifest required}"
 
-# 1. Fetch (stub validates/pass-through for now).
+# 1. Validate/pass-through the corpus materialized by the fetch step.
 scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"
 
 # 2. kql-guard over the corpus. Exit 1 is expected when queries carry errors;
-#    the JSON is still written, so ignore the exit code here.
-DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
-BIN="bin/Debug/net10.0/kql-guard.dll"
-[[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
-"$DOTNET" "$BIN" "$CORPUS" --format json > findings.json || true
+#    the JSON is still written, so ignore the exit code here. On the runner,
+#    KQLGUARD_BIN points at the downloaded NativeAOT binary (no .NET SDK);
+#    locally it is unset, so we build + run the Debug dll as before.
+if [[ -n "${KQLGUARD_BIN:-}" ]]; then
+  SCANNER=("$KQLGUARD_BIN")
+else
+  DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
+  BIN="bin/Debug/net10.0/kql-guard.dll"
+  [[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
+  SCANNER=("$DOTNET" "$BIN")
+fi
+"${SCANNER[@]}" "$CORPUS" --format json > findings.json || true
 
 # 3. Correlate. report.md is the job summary; report.json is machine-readable.
 python3 scripts/calibrate.py findings.json "$MANIFEST" --json report.json > report.md
