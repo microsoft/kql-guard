@@ -1,6 +1,6 @@
 variable "subscription_id" {
   type        = string
-  description = "Target Azure subscription id (56361900-... for the Kuskus runner)."
+  description = "Target Azure subscription id (92288740-... = Kusto_PM_Experiments, verified Owner + westeurope)."
 }
 
 variable "location" {

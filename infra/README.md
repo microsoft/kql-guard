@@ -25,14 +25,14 @@ App Job with the KEDA `github-runner` scale rule. Role assignments: MI → `AcrP
 
 - `az` (logged in: `az login`), `terraform` >= 1.5, and Docker or access to `az acr build`.
 - Owner/Contributor + User Access Administrator on the target subscription
-  (`56361900-da6a-4977-89a7-8e40f44b86f6`) — role assignments require it.
+  **Kusto_PM_Experiments** (`92288740-be22-448e-b3a1-697c0535e005`) — role assignments require it.
 - A GitHub App (below) and the Kuskus viewer grant (below).
 
 ## Operator checklist
 
 Top to bottom; each item links to its section. Everything before §6 is one-time.
 
-- [ ] **Login + target subscription** — `az login && az account set --subscription 56361900-da6a-4977-89a7-8e40f44b86f6`
+- [ ] **Login + target subscription** — `az login && az account set --subscription 92288740-be22-448e-b3a1-697c0535e005`
 - [ ] **§1 Bootstrap remote state** — run the block; keep the printed `STATE_ACCOUNT`.
 - [ ] **§2 GitHub App** — create + install on `microsoft/kql-guard`; keep App ID, Installation ID, `.pem`.
 - [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (App ids/key via `TF_VAR_*`).
@@ -48,7 +48,7 @@ account key (the same auth the `azurerm` backend uses), which also avoids the RB
 that `--auth-mode login` hits on a brand-new account:
 
 ```bash
-az account set --subscription 56361900-da6a-4977-89a7-8e40f44b86f6
+az account set --subscription 92288740-be22-448e-b3a1-697c0535e005
 
 STATE_ACCOUNT="kuskustfstate$(openssl rand -hex 4)"   # 3–24 lowercase alphanumeric
 
@@ -82,7 +82,7 @@ cd infra/terraform
 terraform init -backend-config="storage_account_name=$STATE_ACCOUNT"  # value printed by step 1
 
 # Secrets/ids via env (never commit tfvars):
-export TF_VAR_subscription_id=56361900-da6a-4977-89a7-8e40f44b86f6
+export TF_VAR_subscription_id=92288740-be22-448e-b3a1-697c0535e005
 export TF_VAR_github_app_id=<APP_ID>
 export TF_VAR_github_app_installation_id=<INSTALLATION_ID>
 export TF_VAR_github_app_private_key="$(cat path/to/app.private-key.pem)"
