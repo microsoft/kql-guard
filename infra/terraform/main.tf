@@ -36,6 +36,9 @@ resource "azurerm_storage_account" "state" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   min_tls_version          = "TLS1_2"
+  # Subscription policy denies anonymous blob access; the MI reads the watermark
+  # via AAD (--auth-mode login), so no blob is ever public. ponytail: required by policy.
+  allow_nested_items_to_be_public = false
 }
 
 resource "azurerm_storage_container" "tfstate" {
