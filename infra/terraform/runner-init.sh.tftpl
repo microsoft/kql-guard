@@ -22,7 +22,9 @@ apt-get update
 apt-get install -y --no-install-recommends gh
 
 # The fetch's only runtime dep (pinned to match scripts/manifest.schema.md).
-pip3 install --no-cache-dir --break-system-packages "azure-kusto-data==${azure_kusto_data_version}"
+# 22.04's system Python has no PEP 668 marker, so no --break-system-packages
+# (that flag doesn't exist before pip 23.0.1 and errors on 22.04's pip 22.0.2).
+pip3 install --no-cache-dir "azure-kusto-data==${azure_kusto_data_version}"
 
 # Dedicated non-root runner user.
 id -u runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
