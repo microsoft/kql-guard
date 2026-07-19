@@ -31,12 +31,12 @@
 
 ## 6. Unstub the pipeline wiring
 
-- [ ] 6.1 `.github/workflows/kuskus-report.yml`: the two `fetch-corpus.sh` steps now perform the real pull on the runner (no `--corpus-path`); pass `KUSKUS_*` via env/secrets. `workflow_dispatch` keeps an optional `corpus_path` input to force the offline seam. Update the deferred-integrations header note to drop the fetch (AI suggester remains deferred).
+- [ ] 6.1 `.github/workflows/kuskus-report.yml`: the `fetch-corpus.sh` step performs the real pull on the runner (no `--corpus-path`); pass `KUSKUS_*` via env/secrets. `workflow_dispatch` keeps an optional `corpus_path` input to force the offline seam. Update the deferred-integrations header note to drop the fetch (AI suggester remains deferred). Note: `kuskus-runner-infra` merges `calibrate`+`mine` into one job and adds the durable-watermark blob sync — coordinate so the workflow is edited once.
 - [ ] 6.2 Confirm `run-calibration.sh` / `run-mining.sh` need no change (they already call `fetch-corpus.sh` and consume `scratch/` + `manifest.json`).
 
 ## 7. Docs + verification
 
-- [ ] 7.1 Update `scripts/manifest.schema.md` / `../kuskus-rule-suggester/design.md` cross-reference if the id column (`RequestId`) or the confidential cluster default needs mentioning (id was previously unspecified).
+- [ ] 7.1 Update `scripts/manifest.schema.md` / `../kuskus-rule-suggester/design.md` cross-reference if the id column (`RequestId`) or the cluster default needs mentioning (id was previously unspecified).
 - [ ] 7.2 `./test/run-tests.sh` wires `test_fetch_corpus.py`; full fast suite passes; `scripts/e2e-mining.sh` still green via the `--corpus-path` seam (no live cluster needed).
 - [ ] 7.3 `openspec validate kuskus-corpus-fetch --strict` passes.
 - [ ] 7.4 Manual runner smoke (documented, not in CI): first dispatch performs `getschema` guard, pulls a bounded window, advances the watermark, and the calibrate/mine jobs produce their reports with no query text in any log.

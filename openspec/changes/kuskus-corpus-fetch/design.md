@@ -5,7 +5,8 @@
 The `kuskus-rule-suggester` pipeline consumes a boundary-side corpus: `scratch/<id>.kql` (query
 text, git-ignored) + `manifest.json` (per-id cost). Until now that corpus was hand-supplied via
 `--corpus-path`; `fetch-corpus.sh` was a fail-closed stub. This change acquires it for real from
-the confidential Kuskus cluster. The verified column/unit contract lives in
+the configured Kuskus cluster (starting on the non-confidential `kuskushead`; see Config). The verified
+column/unit contract lives in
 `../kuskus-rule-suggester/design.md` (Fetch contract) and `scripts/manifest.schema.md`.
 
 ## Decisions
@@ -53,7 +54,7 @@ QueryCompletion
 OII-safe — is the `<id>`; the row is written to `scratch/<RequestId>.kql`. (The prior design query
 selected no id column; this closes that gap.) Ids are never derived from query content.
 
-**5. Schema-drift guard (fail-closed).** The confidential cluster's `QueryCompletion` is produced by
+**5. Schema-drift guard (fail-closed).** The cluster's `QueryCompletion` is produced by
 a KustoLogs update policy that is **not in the reference source**, so the parsed column *names* are
 inferred from the emitter. Before the first pull the script runs `QueryCompletion | getschema` and
 asserts the required column set (`RequestId, Text, Duration, TotalCpuMs, MemoryPeak,
@@ -64,7 +65,10 @@ runtime resolution of the one contract item unverifiable from source.
 **6. Watermark.** Runner-local file `${KUSKUS_STATE_DIR}/watermark.txt`, ISO-8601 UTC, outside the
 repo. Absent → `now - <BOOTSTRAP>` (default 7d). Advanced **only** after `scratch/` and
 `manifest.json` are fully written; on any failure it is left untouched and partial `scratch/`
-output is removed, so a rerun re-pulls the same window cleanly.
+output is removed, so a rerun re-pulls the same window cleanly. The script stays file-based and pure
+(testable); because the runner is **ephemeral** (no persistent disk), the workflow persists this file
+to a durable blob around the fetch — see `kuskus-runner-infra` (D6). Fetch is unaware of the storage
+backend.
 
 **7. Boundary.** Only the integer row count is printed to stdout. Query text is written solely into
 the git-ignored `scratch/`. The manifest carries numbers + `state`/`failureReason` only. `Failed`
@@ -104,7 +108,7 @@ fetch-corpus.sh ──(--corpus-path?)──> validate + passthrough        [off
 
 | Var | Meaning | Default |
 |-----|---------|---------|
-| `KUSKUS_CLUSTER` | confidential cluster URI | `https://kuskusheadconf.westeurope.kusto.windows.net` |
+| `KUSKUS_CLUSTER` | cluster URI (non-confidential for now) | `https://kuskushead.westeurope.kusto.windows.net` |
 | `KUSKUS_DATABASE` | database | `Kuskus` |
 | `KUSKUS_MI_CLIENT_ID` | user-assigned MI client id (unset → system-assigned) | *unset* |
 | `KUSKUS_STATE_DIR` | watermark dir (outside repo) | required |
@@ -116,3 +120,7 @@ fetch-corpus.sh ──(--corpus-path?)──> validate + passthrough        [off
 The cluster URI is OII (not secret) so a default is fine; it stays overridable. For local
 developer testing against a dev cluster, `with_az_cli_authentication` may be substituted behind an
 env flag — the runner path always uses managed identity.
+
+Starting on the non-confidential `kuskushead`, query `Text` is mostly the redacted placeholder, so
+the corpus is **calibration-first** (cost columns are unredacted regardless of tier); flip
+`KUSKUS_CLUSTER` to `kuskusheadconf` when confidential access is granted to unstarve mining.

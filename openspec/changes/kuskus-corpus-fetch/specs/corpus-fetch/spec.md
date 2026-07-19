@@ -2,11 +2,11 @@
 
 ### Requirement: Authenticated windowed corpus fetch
 
-The fetch step SHALL, when no local corpus is supplied, connect to the confidential Kuskus cluster
+The fetch step SHALL, when no local corpus is supplied, connect to the configured Kuskus cluster
 using a **managed identity** and pull `QueryCompletion` rows into `scratch/<id>.kql` (query `Text`)
 and a per-`<id>` cost `manifest.json` (`durationMs`, `cpuMs`, `memoryPeakBytes`, `scannedRows`,
-`state`, `failureReason`), matching the existing manifest contract. It SHALL target the confidential
-tier (where query text exists), read cluster/database/limits from the runner environment, and use a
+`state`, `failureReason`), matching the existing manifest contract. It SHALL read the cluster,
+database, and limits from the runner environment, and use a
 per-execution activity id (`RequestId`) as `<id>` — never an id derived from query content. The pull
 SHALL be bounded to a deterministic sliding window: rows with `Timestamp` after the watermark and
 before a late-ingestion lag, capped to a configurable row count taken oldest-first, and SHALL NOT
@@ -46,7 +46,7 @@ not available in source.
 
 ### Requirement: Resumable watermark, fail-closed
 
-The fetch SHALL persist a watermark in a runner-local location outside the repository and SHALL
+The fetch SHALL persist a watermark outside the repository, durable across runs, and SHALL
 advance it to the maximum `Timestamp` pulled **only** after the scratch corpus and manifest are
 fully written. On any failure it SHALL leave the watermark unchanged and remove partial scratch
 output, so a rerun re-pulls the same window without gaps or duplication. When no watermark exists it
