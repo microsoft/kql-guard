@@ -51,11 +51,25 @@ ENV
 chown runner:runner /opt/actions-runner/.env
 
 # Register ONCE (consumes the one-time token) and install as a systemd service.
-sudo -u runner ./config.sh --unattended \
-  --url "${repo_url}" \
-  --token "${registration_token}" \
-  --labels "${labels}" \
-  --name "${runner_name}" \
-  --replace
+# Retry: the runner-registration API occasionally returns transient 5xx
+# (BadGateway/InternalServerError); a boot-once script must not abort on a blip.
+registered=""
+for attempt in $(seq 1 10); do
+  if sudo -u runner ./config.sh --unattended \
+    --url "${repo_url}" \
+    --token "${registration_token}" \
+    --labels "${labels}" \
+    --name "${runner_name}" \
+    --replace; then
+    registered=1
+    break
+  fi
+  echo "config.sh attempt $attempt failed (transient?); retrying in 15s"
+  sleep 15
+done
+[ -n "$registered" ] || {
+  echo "runner registration failed after retries"
+  exit 1
+}
 ./svc.sh install runner
 ./svc.sh start
