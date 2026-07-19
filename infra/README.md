@@ -28,15 +28,39 @@ App Job with the KEDA `github-runner` scale rule. Role assignments: MI → `AcrP
   (`56361900-da6a-4977-89a7-8e40f44b86f6`) — role assignments require it.
 - A GitHub App (below) and the Kuskus viewer grant (below).
 
+## Operator checklist
+
+Top to bottom; each item links to its section. Everything before §6 is one-time.
+
+- [ ] **Login + target subscription** — `az login && az account set --subscription 56361900-da6a-4977-89a7-8e40f44b86f6`
+- [ ] **§1 Bootstrap remote state** — run the block; keep the printed `STATE_ACCOUNT`.
+- [ ] **§2 GitHub App** — create + install on `microsoft/kql-guard`; keep App ID, Installation ID, `.pem`.
+- [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (App ids/key via `TF_VAR_*`).
+- [ ] **§4 `az acr build`** — build + push the runner image.
+- [ ] **§5 Kuskus grant** — send `terraform output -raw kuskus_viewer_grant_command` to the Kuskus team.
+- [ ] **§6 Smoke** — dispatch (dry run); verify the watermark advances and no query text is in any log.
+
 ## 1. One-time remote-state bootstrap
 
-The state backend can't create its own storage, so create it once (names must be globally unique):
+The state backend can't create its own storage, so create it once. Copy-paste as-is —
+`STATE_ACCOUNT` is auto-generated globally-unique, and the `tfstate` container is created with the
+account key (the same auth the `azurerm` backend uses), which also avoids the RBAC-propagation delay
+that `--auth-mode login` hits on a brand-new account:
 
 ```bash
+az account set --subscription 56361900-da6a-4977-89a7-8e40f44b86f6
+
+STATE_ACCOUNT="kuskustfstate$(openssl rand -hex 4)"   # 3–24 lowercase alphanumeric
+
 az group create -n kuskus-runner-tfstate -l westeurope
-az storage account create -n <STATE_ACCOUNT> -g kuskus-runner-tfstate -l westeurope \
-  --sku Standard_LRS --min-tls-version TLS1_2
-az storage container create -n tfstate --account-name <STATE_ACCOUNT> --auth-mode login
+az storage account create -n "$STATE_ACCOUNT" -g kuskus-runner-tfstate -l westeurope \
+  --sku Standard_LRS --min-tls-version TLS1_2 --allow-blob-public-access false
+KEY=$(az storage account keys list -n "$STATE_ACCOUNT" -g kuskus-runner-tfstate \
+  --query '[0].value' -o tsv)
+az storage container create -n tfstate --account-name "$STATE_ACCOUNT" --account-key "$KEY"
+
+echo "STATE_ACCOUNT=$STATE_ACCOUNT"
+echo "init:  terraform init -backend-config=\"storage_account_name=$STATE_ACCOUNT\""
 ```
 
 ## 2. GitHub App (runner registration + KEDA scaler)
@@ -55,7 +79,7 @@ so no extra credential is needed there.
 
 ```bash
 cd infra/terraform
-terraform init -backend-config="storage_account_name=<STATE_ACCOUNT>"
+terraform init -backend-config="storage_account_name=$STATE_ACCOUNT"  # value printed by step 1
 
 # Secrets/ids via env (never commit tfvars):
 export TF_VAR_subscription_id=56361900-da6a-4977-89a7-8e40f44b86f6
