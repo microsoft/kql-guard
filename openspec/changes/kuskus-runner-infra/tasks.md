@@ -7,7 +7,7 @@
 
 - [x] 2.1 Resource group; user-assigned MI; storage account with `tfstate` + `kuskus-state` containers.
 - [x] 2.2 Role assignment: MI → `Storage Blob Data Contributor` on the `kuskus-state` container.
-- [ ] 2.3 `terraform validate` + `terraform plan` clean.
+- [x] 2.3 `terraform validate` + `terraform plan` clean. Applied 2026-07-20 (14 resources; required an anon-blob-access policy fix on the storage account).
 
 ## 3. Runner VM provisioning (cloud-init)
 
@@ -18,7 +18,7 @@
 
 - [x] 4.1 Egress-only network: VNet + subnet + NSG (deny all inbound) + Standard public IP + NIC.
 - [x] 4.2 `azurerm_linux_virtual_machine` (`Standard_B2s`, Ubuntu): MI attached, `admin_ssh_key`, `custom_data` = the cloud-init template rendered with the `KUSKUS_*` + registration inputs.
-- [ ] 4.3 `terraform plan` shows the VM + networking; document the registration-token mint in `infra/README.md`.
+- [x] 4.3 `terraform plan` shows the VM + networking; the registration-token mint is documented in `infra/README.md`. Applied — VM toolchain, MI `--client-id` login, and blob RBAC (read+write) verified live on the VM.
 
 ## 5. Runner registration + secrets
 
@@ -36,6 +36,6 @@
 ## 7. Docs + validation
 
 - [x] 7.1 `infra/README.md`: state bootstrap, one-time registration-token mint, the `.add database Kuskus viewers ('aadapp=<mi-client-id>;<tenant>')` grant request to the Kuskus team, `terraform apply` (token + SSH key), and the first-dispatch smoke procedure.
-- [ ] 7.2 `terraform fmt -check` + `terraform validate` green; `terraform plan` reviewed against the target subscription.
+- [x] 7.2 `terraform fmt -check` + `terraform validate` green; applied against sub `92288740` (Kusto_PM_Experiments).
 - [x] 7.3 `openspec validate kuskus-runner-infra --strict` passes.
-- [ ] 7.4 Manual smoke (documented, not in CI): dispatch → the Online runner picks up the job → getschema guard + fetch + calibrate/mine → watermark advances in the blob → no query text in any log → scrub clears `scratch/`.
+- [ ] 7.4 Manual smoke (documented, not in CI): dispatch → the Online runner picks up the job → getschema guard + fetch + calibrate/mine → watermark advances in the blob → no query text in any log → scrub clears `scratch/`. PENDING — VM applied and toolchain/MI/blob-RBAC verified live; blocked on (a) a GitHub Actions runner-registration outage (auto-retry armed) and (b) the out-of-band Kuskus viewer grant.
