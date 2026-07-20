@@ -32,7 +32,7 @@ public static class Rules
         new("KQL002", "AvoidContainsOperator",
             "The 'contains' operator performs a full-text scan; prefer 'has' for whole-term matching.", "warning", 1),
         new("KQL003", "MissingTimeFilter",
-            "Table query has no time-range filter (ago()/between); it scans the full table — a top cost driver.", "warning", 5),
+            "Table query has no time-range filter (ago()/between); it scans the full table — a top cost driver.", "warning", 4),
         new("KQL004", "UnscopedSearch",
             "'search' with no table scope queries every table; scope it with 'search in (Table)' or use a table reference.", "warning", 5),
         new("KQL005", "WildcardUnion",
