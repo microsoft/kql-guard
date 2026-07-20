@@ -31,3 +31,13 @@ output "kuskus_viewer_grant_command" {
   description = "Out-of-band grant — run on a REGIONAL Kuskus cluster (e.g. kuskusweu.westeurope), not kuskushead. See infra/README §4."
   value       = ".add database ${var.kuskus_database} viewers ('aadapp=${azurerm_user_assigned_identity.runner.client_id};${data.azurerm_client_config.current.tenant_id}')"
 }
+
+output "aoai_endpoint" {
+  description = "Azure OpenAI endpoint the new-rule drafter calls (KUSKUS_AOAI_ENDPOINT)."
+  value       = azurerm_cognitive_account.aoai.endpoint
+}
+
+output "aoai_deployment" {
+  description = "Azure OpenAI deployment name (KUSKUS_AOAI_DEPLOYMENT)."
+  value       = azurerm_cognitive_deployment.drafter.name
+}
