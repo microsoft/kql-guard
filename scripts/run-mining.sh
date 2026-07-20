@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
 done
 : "${CORPUS:?--corpus-path required}"; : "${MANIFEST:?--manifest required}"
 
-DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
+DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"  # net10 at ~/.dotnet, else PATH (CI)
 
 # 1. Validate/pass-through the corpus materialized by the fetch step.
 scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"

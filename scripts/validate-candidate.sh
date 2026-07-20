@@ -19,7 +19,7 @@ THRESHOLD=20
 [[ "${4:-}" == "--threshold" ]] && THRESHOLD="${5:?}"
 VALIDATE_TESTS="${VALIDATE_TESTS:-./test/run-tests.sh}"
 VALIDATE_BUILD="${VALIDATE_BUILD:-dotnet publish -c Release -r linux-x64}"
-DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
+DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"  # net10 at ~/.dotnet, else PATH (CI)
 
 CAND_ABS="$(cd "$(dirname "$CAND")" && pwd)/$(basename "$CAND")"
 SCRATCH_ABS="$(cd "$SCRATCH" && pwd)"

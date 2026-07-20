@@ -25,7 +25,7 @@ scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"
 if [[ -n "${KQLGUARD_BIN:-}" ]]; then
   SCANNER=("$KQLGUARD_BIN")
 else
-  DOTNET="${DOTNET:-$HOME/.dotnet/dotnet}"
+  DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"  # net10 at ~/.dotnet, else PATH (CI)
   BIN="bin/Debug/net10.0/kql-guard.dll"
   [[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
   SCANNER=("$DOTNET" "$BIN")
