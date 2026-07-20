@@ -45,6 +45,7 @@ public static class Program
         bool writeBaseline = false;
         string? schemaPath = null;
         bool strict = false;
+        bool shapes = false;
 
         // Parse the remaining flags order-independently.
         for (int i = 1; i < args.Length; i++)
@@ -91,6 +92,10 @@ public static class Program
             {
                 strict = true;
             }
+            else if (string.Equals(args[i], "--shapes", StringComparison.OrdinalIgnoreCase))
+            {
+                shapes = true;
+            }
             else if (string.Equals(args[i], "--schema", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length)
             {
@@ -134,9 +139,15 @@ public static class Program
         }
         var violations = new List<Violation>();
         var scores = new List<(string File, int Score)>();
+        var shapeMap = shapes ? new Dictionary<string, string>() : null;
         bool budgetBreached = false;
         foreach (var filePath in files)
         {
+            if (shapeMap != null)
+            {
+                var sig = ShapeSignature.Compute(filePath);
+                if (sig != null) shapeMap[filePath] = sig;
+            }
             var fileViolations = AnalyzeFile(filePath, schema);
             violations.AddRange(fileViolations);
 
@@ -178,7 +189,7 @@ public static class Program
         }
         else if (format == "json")
         {
-            WriteJson(violations, scores);
+            WriteJson(violations, scores, shapeMap);
         }
         else
         {
@@ -334,7 +345,8 @@ public static class Program
         Console.WriteLine(JsonSerializer.Serialize(log, KqlGuardSarifContext.Default.SarifLog));
     }
 
-    private static void WriteJson(List<Violation> violations, List<(string File, int Score)> scores)
+    private static void WriteJson(List<Violation> violations, List<(string File, int Score)> scores,
+        Dictionary<string, string>? shapes = null)
     {
         var findings = new List<JsonFinding>();
         foreach (var v in violations)
@@ -343,7 +355,7 @@ public static class Program
         }
         var costScores = new Dictionary<string, int>();
         foreach (var (file, score) in scores) costScores[file] = score;
-        var report = new JsonReport(findings, costScores);
+        var report = new JsonReport(findings, costScores, shapes);
         Console.WriteLine(JsonSerializer.Serialize(report, KqlGuardSarifContext.Default.JsonReport));
     }
 

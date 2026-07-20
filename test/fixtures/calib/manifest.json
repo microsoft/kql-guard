@@ -1,0 +1,7 @@
+{
+  "q1": {"durationMs":10.0,   "cpuMs":5.0,   "memoryPeakBytes":1000,   "scannedRows":100,      "state":"Completed","failureReason":null},
+  "q2": {"durationMs":9000.0, "cpuMs":8000.0,"memoryPeakBytes":9000000,"scannedRows":100000000,"state":"Completed","failureReason":null},
+  "q3": {"durationMs":1.0,    "cpuMs":1.0,   "memoryPeakBytes":100,    "scannedRows":0,        "state":"Failed",   "failureReason":"Syntax error: SYN0001: unexpected token"},
+  "q4": {"durationMs":2.0,    "cpuMs":1.0,   "memoryPeakBytes":200,    "scannedRows":10,       "state":"Completed","failureReason":null},
+  "q5": {"durationMs":3.0,    "cpuMs":2.0,   "memoryPeakBytes":300,    "scannedRows":0,        "state":"Failed",   "failureReason":"Semantic error: SEM0100: Failed to resolve column 'Foo'"}
+}

@@ -137,5 +137,35 @@ RUN fmt "$tmp" --check >/dev/null; assert_exit "fmt --check after write" 0 $?
 assert_contains "fmt pipe-per-line" "| where EventID == 4688" "$(cat "$tmp")"
 rm -f "$tmp"
 
+# --shapes: structurally identical queries share a signature; identifiers/literals never leak.
+echo "--- shape signatures ---"
+shp=$(RUN test/fixtures/shapes --format json --shapes)
+if python3 - "$shp" <<'PY'
+import json, sys
+doc = json.loads(sys.argv[1])
+sh = doc.get("shapes") or {}
+a = sh.get("test/fixtures/shapes/a.kql"); b = sh.get("test/fixtures/shapes/b.kql"); c = sh.get("test/fixtures/shapes/c.kql")
+ok = True
+if a is None or b is None or c is None: print("missing shapes:", list(sh)); ok = False
+if a != b: print("a/b should match"); ok = False
+if a == c: print("a/c should differ"); ok = False
+blob = json.dumps(sh)
+for leak in ("StormEvents", "Traffic", "kansas", "tokyo", "SecretCol"):
+    if leak in blob: print("LEAK:", leak); ok = False
+sys.exit(0 if ok else 1)
+PY
+then echo "ok: --shapes signatures"; else echo "FAIL: --shapes signatures"; fails=$((fails+1)); fi
+
+# --- Kuskus calibration pipeline self-checks (Python stdlib + shell) ---
+echo "--- calibration scripts ---"
+python3 scripts/test_calibrate.py     || fails=$((fails+1))
+python3 scripts/test_fetch_corpus.py  || fails=$((fails+1))
+bash    scripts/test_leak_guard.sh    || fails=$((fails+1))
+bash    scripts/test_propose_weight.sh || fails=$((fails+1))
+python3 scripts/test_mine.py          || fails=$((fails+1))
+python3 scripts/test_apply_candidate.py || fails=$((fails+1))
+bash    scripts/test_validate_candidate.sh || fails=$((fails+1))
+bash    scripts/test_publish_candidate.sh || fails=$((fails+1))
+
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi

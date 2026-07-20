@@ -1,0 +1,16 @@
+# Terraform working files — never commit state, provider binaries, or tfvars
+# (tfvars carry the subscription id and the one-time runner registration token).
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep .terraform.lock.hcl committed (pins provider versions).
+!.terraform.lock.hcl

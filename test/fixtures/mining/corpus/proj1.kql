@@ -1,0 +1,3 @@
+Requests
+| where Duration > ago(1d)
+| project Name, Duration

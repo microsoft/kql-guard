@@ -21,6 +21,7 @@ kql-guard <path> [--format text|sarif|json] [--max-cost <int>] [--strict] [--tab
 |----------|-------------|
 | `<path>` | A `.kql`/`.yaml`/`.yml` file or a directory scanned recursively. Sentinel `.yaml` rules: the embedded `query:` is linted in place. |
 | `--format text\|sarif\|json` | Output as text diagnostics (default), SARIF v2.1.0, or JSON. |
+| `--shapes` | Internal (shape mining): with `--format json`, add a per-query boundary-safe AST **shape signature** map — operator/built-in kinds only, no identifiers or literals. Not needed for routine linting; see Roadmap. |
 | `--max-cost <n>` | Fail (exit `1`) if any file's cost score exceeds `n`. |
 | `--strict` | Fail (exit `1`) on any finding, including advisory cost warnings. |
 | `--table-sizes <file>` | Offline JSON map `{"Table":factor}` scaling scan-rule weights per table. |
@@ -218,6 +219,23 @@ dotnet publish -c Release -r linux-x64   # NativeAOT binary
 
 ## Roadmap
 
+- **Rule calibration (internal)** — an aperiodic pipeline
+  (`.github/workflows/kuskus-report.yml`, self-hosted Kuskus-access runner)
+  correlates kql-guard findings with real ADX `QueryCompletion` execution cost
+  to validate rule CostWeights and surface weight-review PRs. It runs entirely
+  boundary-side (`scripts/*.py`, `scripts/*.sh`) and enforces a strict trust
+  boundary: confidential query text stays in the git-ignored `scratch/`, and
+  only aggregate numbers + rule IDs ever cross into this repo (guarded by
+  `scripts/leak-guard.sh`). Weight changes are mechanical and human-reviewed;
+  no query text or AI is involved on that path. See
+  `openspec/changes/kuskus-rule-suggester/` for the full design.
+
+- **Shape mining (internal).** An aperiodic, self-hosted pipeline clusters
+  recurring query shapes (`--shapes`) from internal telemetry and drafts
+  human-reviewed new-rule PRs behind the same strict trust boundary. Only
+  abstracted shape signatures + aggregate cost cross into this repo; drafted
+  rules are synthetic, fail-closed validated (`scripts/validate-candidate.sh`),
+  and never used by public lint-in-CI runs.
 - **Live-API cost enrichment** — `--table-sizes` scales weights from a static
   map; `pull --with-sizes` fetches real sizes into that map via the
   `ICostEnricher` seam, keeping the default fully offline.

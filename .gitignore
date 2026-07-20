@@ -2,3 +2,11 @@ bin/
 obj/
 .github/prompts/
 .github/skills/
+scratch/
+/findings.json
+/report.json
+/report.md
+/candidates.json
+/candidate.json
+/manifest.json
+__pycache__/

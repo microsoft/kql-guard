@@ -1,0 +1,4 @@
+StormEvents
+| where State contains "kansas"
+| project EventType, StartTime
+| take 10
