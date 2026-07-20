@@ -33,9 +33,13 @@ so downstream scripts never depend on text being present.
 `scripts/fetch_corpus.py` produces the corpus above. It queries ADX
 `QueryCompletion` on `KUSKUS_CLUSTER` (default
 `https://kuskushead.westeurope.kusto.windows.net`, database `Kuskus`) via
-managed-identity auth, oldest-first from a durable watermark. `fetch-corpus.sh`
-dispatches to it when no `--corpus-path` is given; with `--corpus-path` it
-validates and passes a pre-materialized corpus through (the offline test seam).
+managed-identity auth, oldest-first from a durable watermark. Each run is bounded
+by cumulative result bytes (~40 MB, `KUSKUS_FETCH_BYTES`) as well as row count
+(`KUSKUS_FETCH_CAP`), because query `Text` overflows Kusto's 64 MB result cap
+before the row cap is reached; the watermark paginates any backlog across runs.
+`fetch-corpus.sh` dispatches to it when no `--corpus-path` is given; with
+`--corpus-path` it validates and passes a pre-materialized corpus through (the
+offline test seam).
 
 It depends on the Kusto SDK, pinned **`azure-kusto-data==6.0.4`**. This is a
 **runner-only** dependency, installed on the self-hosted runner image — it is

@@ -26,7 +26,7 @@
 ## 5. Connection + windowed query (managed identity)
 
 - [x] 5.1 Implement `connect()`: build `KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(KUSKUS_CLUSTER, client_id=KUSKUS_MI_CLIENT_ID or None)` → `KustoClient`. Read cluster/db/knobs from env (see design Config table) with the documented defaults.
-- [x] 5.2 Implement `build_query(watermark, cap, lag, maxlen)` returning the design KQL (parameterize watermark/cap/lag/maxlen; server-side unit conversions). Unit-test that the emitted KQL contains the watermark, `top <cap> by Timestamp asc`, the redaction filter, and the unit conversions (string assertions, no cluster).
+- [x] 5.2 Implement `build_query(watermark, cap, lag, maxlen, bootstrap, bytes_cap)` returning the design KQL (parameterize watermark/cap/lag/maxlen/bytes; server-side unit conversions). Unit-test that the emitted KQL contains the watermark, the bounded `top <cap> by Timestamp asc` + `serialize` + the `row_cumsum` byte budget, the redaction filter, and the unit conversions (string assertions, no cluster).
 - [x] 5.3 Implement `main()`: connect → `assert_schema` → `read_watermark` → execute query → `rows_to_corpus` → write `manifest.json` → `advance_watermark(max_ts)` → print only the row count. `sys.exit(1)` (non-zero) on any failure, watermark untouched.
 
 ## 6. Unstub the pipeline wiring

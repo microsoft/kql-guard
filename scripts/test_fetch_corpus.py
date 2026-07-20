@@ -137,13 +137,17 @@ def test_assert_schema(fails):
 
 
 def test_build_query(fails):
-    q = fc.build_query("2026-07-19T00:00:00Z", 50000, "1h", 65536, "7d")
+    q = fc.build_query("2026-07-19T00:00:00Z", 50000, "1h", 65536, "7d", 40000000)
     fails += check("query carries watermark", "2026-07-19T00:00:00Z" in q)
-    fails += check("query is oldest-first capped", "top 50000 by Timestamp asc" in q)
+    fails += check("query is oldest-first bounded", "top 50000 by Timestamp asc" in q)
+    fails += check("query byte-bounded",
+                   "serialize" in q
+                   and "extend _cum = row_cumsum(strlen(Text) + strlen(tostring(FailureReason)) + 256)" in q
+                   and "where _cum < 40000000" in q)
     fails += check("query filters redacted", REDACTED in q)
     fails += check("query converts duration", "totimespan(Duration) / 1ms" in q)
     fails += check("query reads scanned rows", "ScannedExtentsStatistics" in q)
-    boot = fc.build_query(None, 10, "1h", 100, "7d")
+    boot = fc.build_query(None, 10, "1h", 100, "7d", 1000)
     fails += check("no watermark bootstraps", "ago(7d)" in boot)
     return fails
 
