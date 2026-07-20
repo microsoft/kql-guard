@@ -48,8 +48,17 @@ TOP=$(python3 -c 'import json; c=json.load(open("candidates.json")); print(json.
 if [[ -z "$TOP" ]]; then echo "run-mining: no new-rule candidates."; rm -f candidates.json findings.json; exit 0; fi
 
 # 4. Draft (pluggable; mock default), validate (fail-closed), publish (idempotent).
+# Degrade-to-green: the real drafter (aoai-suggester.py) is fail-closed and exits
+# nonzero on any model/network/auth hiccup. Calibration (the primary value) has
+# already run this job, so a drafting blip is a summary line, not a red run — and
+# fail-closed still guarantees no bad PR. Real breakage stays red elsewhere.
 SUGGESTER_CMD="${SUGGESTER_CMD:-python3 scripts/mock-suggester.py}"
-printf '%s' "$TOP" | $SUGGESTER_CMD > candidate.json
+if ! printf '%s' "$TOP" | $SUGGESTER_CMD > candidate.json; then
+  echo "run-mining: suggester failed; skipping the new-rule draft this run." \
+    | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+  rm -f candidates.json candidate.json findings.json
+  exit 0
+fi
 
 if scripts/validate-candidate.sh candidate.json "$CORPUS" "$CORPUS"; then
   if [[ "$APPLY" -eq 1 ]]; then
