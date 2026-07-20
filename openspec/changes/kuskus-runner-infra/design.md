@@ -60,13 +60,15 @@ in a NAT gateway / private endpoint).
 - **PR-open** uses the workflow job's built-in `GITHUB_TOKEN` (`kuskus-report.yml` already declares
   `pull-requests: write`) — no third credential.
 
-**4. Toolchain via cloud-init, no image, no .NET SDK.** The VM's cloud-init installs the official
-Actions runner agent + `az`, `python3` + `azure-kusto-data` (pinned), `gh`, `jq` — the persistent-VM
-equivalent of the old runner image (dropped with the Container App Job). The scanner is pulled at job
-time via `gh release download kql-guard-linux-x64` (`release.yml` already publishes it), so the VM
-needs no .NET SDK and no re-provision when kql-guard changes — and calibration/mining run against the
-**shipped** rules (arguably more correct than HEAD). Upgrade path: add a build step (needs the SDK)
-only if HEAD-rule calibration is wanted.
+**4. Toolchain via cloud-init, no image; .NET SDK for build-from-source.** The VM's cloud-init installs the
+official Actions runner agent + `az`, `python3` + `azure-kusto-data` (pinned), `gh`, `jq`, and the **.NET
+SDK** (via the official dotnet-install script; NativeAOT prereqs `clang` + `zlib1g-dev`) — the persistent-VM
+equivalent of the old runner image (dropped with the Container App Job). The scanner is **built from HEAD**
+at job time (`dotnet build -c Debug`), so calibration/mining run against the source under review — it carries
+`--shapes` (which the shipped release predates), and `validate-candidate.sh` can COMPILE a drafted rule for
+the over-report gate, which needs the SDK and the confidential corpus together (they coexist only here).
+Trade-off vs. the earlier download-the-release design: a one-time SDK install + a ~1–2 min build per weekly
+run, in exchange for HEAD-matching rules, `--shapes`, and a real compile/validate gate.
 
 **5. Single pipeline job (merge `calibrate` + `mine`) + end-of-run scrub.** Two separate jobs would
 fetch the corpus twice and race the watermark (whichever advances first starves the other). Merge into
@@ -154,5 +156,6 @@ infra/
 - **Key Vault** — no durable secret to store now; add if one appears.
 - **Private endpoint / IP allow-list** — public AAD-only cluster; add if it restricts by IP.
 - **AKS / ARC** — a weekly job doesn't warrant a cluster.
-- **Scanner build step** — download the shipped binary; add if HEAD-rule calibration is wanted.
+- **Download the shipped release binary** — the original scanner-acquisition path; replaced by
+  build-from-source (HEAD-matching rules + `--shapes` + a compile-capable validate gate).
 - **Bootstrap TF module** — one documented `az` command is smaller than the module.

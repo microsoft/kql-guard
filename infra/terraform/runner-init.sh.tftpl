@@ -8,12 +8,12 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-pip jq ca-certificates curl sudo
+apt-get install -y --no-install-recommends python3 python3-pip jq ca-certificates curl sudo clang zlib1g-dev
 
 # az CLI (MI login + blob watermark sync).
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-# gh CLI (release download + PR open).
+# gh CLI (opens the mechanical weight + new-rule PRs).
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   -o /usr/share/keyrings/githubcli-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -25,6 +25,17 @@ apt-get install -y --no-install-recommends gh
 # 22.04's system Python has no PEP 668 marker, so no --break-system-packages
 # (that flag doesn't exist before pip 23.0.1 and errors on 22.04's pip 22.0.2).
 pip3 install --no-cache-dir "azure-kusto-data==${azure_kusto_data_version}"
+
+# .NET SDK: the runner builds kql-guard from source (the shipped release predates
+# --shapes and would drift from HEAD) and validate-candidate.sh must COMPILE a
+# drafted rule, so a real SDK — not just the prebuilt binary — has to be on the
+# box. Installed via the version-agnostic official script (net10 is not in
+# jammy's apt feed); NativeAOT publish needs clang + zlib1g-dev (installed above).
+# /usr/local/bin is already on the runner's captured PATH, so jobs find `dotnet`.
+curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+bash /tmp/dotnet-install.sh --channel "${dotnet_channel}" --install-dir /usr/local/dotnet
+rm -f /tmp/dotnet-install.sh
+ln -sf /usr/local/dotnet/dotnet /usr/local/bin/dotnet
 
 # Dedicated non-root runner user.
 id -u runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
@@ -47,6 +58,9 @@ KUSKUS_DATABASE=${kuskus_database}
 KUSKUS_MI_CLIENT_ID=${mi_client_id}
 KUSKUS_STATE_ACCOUNT=${state_account}
 KUSKUS_STATE_CONTAINER=${state_container}
+DOTNET_ROOT=/usr/local/dotnet
+DOTNET_CLI_TELEMETRY_OPTOUT=1
+DOTNET_NOLOGO=1
 ENV
 chown runner:runner /opt/actions-runner/.env
 
