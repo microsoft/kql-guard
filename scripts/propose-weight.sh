@@ -25,7 +25,12 @@ PY
 )
 [[ -n "$OLD" ]] || { echo "propose-weight: rule ${RULE} not found in CostRules.cs" >&2; exit 1; }
 
-git switch -c "${BRANCH}"
+# Branch each PR from the pristine job base and restore HEAD afterward, so
+# sibling proposals in the same --apply run each branch from the base instead of
+# stacking onto the previous proposal's branch.
+BASE=$(git rev-parse HEAD)
+trap 'git switch --detach "$BASE" >/dev/null 2>&1 || true' EXIT
+git switch -c "${BRANCH}" "${BASE}"
 python3 scripts/_set_weight.py CostRules.cs "${RULE}" "${NEW}"
 git add CostRules.cs
 git commit -F - <<EOF

@@ -54,6 +54,7 @@ chown runner:runner /opt/actions-runner/.env
 # Retry: the runner-registration API occasionally returns transient 5xx
 # (BadGateway/InternalServerError); a boot-once script must not abort on a blip.
 registered=""
+set +x  # don't trace the one-time registration token into cloud-init logs
 for attempt in $(seq 1 10); do
   if sudo -u runner ./config.sh --unattended \
     --url "${repo_url}" \
@@ -67,6 +68,7 @@ for attempt in $(seq 1 10); do
   echo "config.sh attempt $attempt failed (transient?); retrying in 15s"
   sleep 15
 done
+set -x
 [ -n "$registered" ] || {
   echo "runner registration failed after retries"
   exit 1

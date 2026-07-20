@@ -43,7 +43,11 @@ if [[ "$APPLY" -eq 0 ]]; then
   exit 0
 fi
 
-git switch -c "${BRANCH}"
+# Branch from the pristine job base and restore HEAD afterward, so a weight PR
+# proposed earlier in the same --apply job isn't carried into this rule branch.
+BASE=$(git rev-parse HEAD)
+trap 'git switch --detach "$BASE" >/dev/null 2>&1 || true' EXIT
+git switch -c "${BRANCH}" "${BASE}"
 python3 scripts/apply-candidate.py "$CAND"
 git add -A
 git commit -F - <<EOF

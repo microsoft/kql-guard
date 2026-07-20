@@ -12,8 +12,11 @@ artifact = " ".join(open(sys.argv[1], encoding="utf-8", errors="replace").read()
 K = 8
 for path in glob.glob(os.path.join(sys.argv[2], "**", "*.kql"), recursive=True):
     toks = open(path, encoding="utf-8", errors="replace").read().split()
-    for i in range(len(toks) - K + 1):
-        shingle = " ".join(toks[i:i + K])
+    # ponytail: short queries (< K tokens) still get scanned as a single whole-text
+    # shingle — otherwise a verbatim <8-token confidential query would slip past.
+    k = min(K, len(toks))
+    for i in range(len(toks) - k + 1):
+        shingle = " ".join(toks[i:i + k])
         if shingle and shingle in artifact:
             sys.stderr.write(f"LEAK: {os.path.basename(path)} :: {shingle[:60]}...\n")
             sys.exit(1)
