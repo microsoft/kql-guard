@@ -40,7 +40,6 @@ ${EVIDENCE}. Mechanical weight change from Kuskus calibration; aggregate cost
 evidence only, no query text. Human review required before merge.
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-Copilot-Session: b53e8451-3660-48d9-844a-cecad80cb0db
 EOF
 git push -u origin "${BRANCH}"
 gh pr create --fill --head "${BRANCH}" \
