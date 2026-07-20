@@ -44,7 +44,7 @@ public static class Rules
         new("KQL008", "NoColumnOrRowReduction",
             "Query returns table rows with no project/summarize/take; it keeps every column and row in memory.", "warning", 1),
         new("KQL009", "UnboundedMvExpand",
-            "'mv-expand' with no 'limit' can explode row counts; add 'limit N' to cap fan-out.", "warning", 3),
+            "'mv-expand' with no 'limit' can explode row counts; add 'limit N' to cap fan-out.", "warning", 2),
         new("KQL010", "CrossClusterQuery",
             "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
         new("KQL011", "UnboundedSort",
