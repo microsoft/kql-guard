@@ -34,7 +34,19 @@ jobs:
   run:
     runs-on: [self-hosted, kuskus]
     env:
+      # gh only *reads* PR state for idempotency here (github.token suffices).
+      # PR *creation* is done by a human from the pushed branch — the org blocks
+      # Actions from opening PRs and caps tokens at 8 days, so there's no
+      # elevated token to use; see propose-weight.sh / publish-candidate.sh.
       GH_TOKEN: ${{ github.token }}
+      # Identity for the mechanical --apply commits (propose-weight.sh /
+      # publish-candidate.sh). The persistent runner has no git user config, so
+      # `git commit` aborts with exit 128 ("empty ident name"). Set it via env
+      # (not `git config`) so nothing persists on the shared runner.
+      GIT_AUTHOR_NAME: "github-actions[bot]"
+      GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+      GIT_COMMITTER_NAME: "github-actions[bot]"
+      GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
     steps:
       - uses: actions/checkout@v4
 
