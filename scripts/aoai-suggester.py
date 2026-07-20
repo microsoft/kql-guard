@@ -180,7 +180,7 @@ def merge_and_validate(model_out, inp, assigned_id, costrules_text, samples_dir)
             raise ValueError("missing field: " + k)
     if c["level"] not in LEVELS:
         raise ValueError("bad level: %r" % (c["level"],))
-    if not isinstance(c["weight"], int) or isinstance(c["weight"], bool) or c["weight"] < 1:
+    if not isinstance(c["weight"], int) or isinstance(c["weight"], bool) or c["weight"] < 1:  # bool is an int subclass; reject JSON true/false
         raise ValueError("bad weight: %r" % (c["weight"],))
     if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", c["sampleSlug"]):
         raise ValueError("bad sampleSlug: %r" % (c["sampleSlug"],))

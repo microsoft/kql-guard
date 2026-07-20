@@ -159,5 +159,82 @@ def missing_field(messages):
 rc, out = run_main(json.dumps(INP), missing_field)
 check(rc == 1 and out.strip() == "", "main() fails closed on a missing field (rc=1, empty stdout)")
 
+# --- _call_aoai builds a correct authenticated request (network-free) ---
+import urllib.request as _urlreq
+
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._b = json.dumps(payload).encode()
+
+    def read(self, *a):
+        return self._b
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _call_aoai_capture(model_payload):
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["headers"] = {k.lower(): v for k, v in req.header_items()}
+        captured["body"] = req.data
+        return _FakeResp({"choices": [{"message": {"content": json.dumps(model_payload)}}]})
+
+    keys = ("KUSKUS_AOAI_ENDPOINT", "KUSKUS_AOAI_DEPLOYMENT", "KUSKUS_AOAI_API_VERSION")
+    saved_env = {k: os.environ.get(k) for k in keys}
+    saved_token, saved_open = sug._imds_token, _urlreq.urlopen
+    sug._imds_token = lambda: "tok-123"
+    _urlreq.urlopen = fake_urlopen
+    os.environ["KUSKUS_AOAI_ENDPOINT"] = "https://ep.openai.azure.com/"
+    os.environ["KUSKUS_AOAI_DEPLOYMENT"] = "gpt-4o"
+    os.environ["KUSKUS_AOAI_API_VERSION"] = "2024-10-21"
+    try:
+        return sug._call_aoai([{"role": "user", "content": "hi"}]), captured
+    finally:
+        sug._imds_token = saved_token
+        _urlreq.urlopen = saved_open
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+_out, _cap = _call_aoai_capture(good_model_out("KQL014"))
+check(_cap["headers"].get("authorization") == "Bearer tok-123",
+      "_call_aoai sends the IMDS token as a Bearer header")
+check("ep.openai.azure.com" in _cap["url"] and "gpt-4o" in _cap["url"]
+      and "api-version=2024-10-21" in _cap["url"], "_call_aoai builds the URL from env")
+check(b'"json_schema"' in _cap["body"], "_call_aoai requests json_schema structured output")
+check(_out["name"] == "UnboundedFacet", "_call_aoai extracts the model content dict")
+
+
+def _call_aoai_refusal():
+    def fake_urlopen(req, timeout=None):
+        return _FakeResp({"choices": [{"message": {"refusal": "no"}}]})
+
+    saved_token, saved_open = sug._imds_token, _urlreq.urlopen
+    sug._imds_token = lambda: "tok"
+    _urlreq.urlopen = fake_urlopen
+    os.environ["KUSKUS_AOAI_ENDPOINT"] = "https://ep.openai.azure.com/"
+    os.environ["KUSKUS_AOAI_DEPLOYMENT"] = "gpt-4o"
+    try:
+        sug._call_aoai([{"role": "user", "content": "hi"}])
+        return False
+    except ValueError:
+        return True
+    finally:
+        sug._imds_token = saved_token
+        _urlreq.urlopen = saved_open
+
+
+check(_call_aoai_refusal(), "_call_aoai raises on a model refusal")
+
 print("ALL PASS" if fails == 0 else "%d FAILED" % fails)
 sys.exit(0 if fails == 0 else 1)
