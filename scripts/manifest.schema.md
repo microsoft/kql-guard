@@ -2,7 +2,7 @@
 
 The fetch step writes two things per query drawn from ADX `QueryCompletion`:
 
-1. `scratch/<id>.kql` — the query `Text`. `<id>` is `tostring(RequestId)`, an
+1. `scratch/<id>.kql` — the query `Text`. `<id>` is `tostring(RootActivityId)`, an
    opaque per-row id, never derived from query content. Git-ignored; never
    leaves the runner.
 2. `manifest.json` — one entry per `<id>`, cost only, no text:
@@ -11,7 +11,7 @@ The fetch step writes two things per query drawn from ADX `QueryCompletion`:
 {
   "<id>": {
     "durationMs":      123.4,        // totimespan(QueryCompletion.Duration) / 1ms  (Duration is a timespan)
-    "cpuMs":           456.7,        // QueryCompletion.TotalCpuMs  (already ms)
+    "cpuMs":           456.7,        // QueryCompletion.TotalCPU / 1ms  (TotalCPU is a timespan)
     "memoryPeakBytes": 789012,       // QueryCompletion.MemoryPeak  (long, bytes)
     "scannedRows":     3456789,      // todynamic(QueryCompletion.ScannedExtentsStatistics).ScannedRowsCount
     "state":           "Completed",  // or "Failed"

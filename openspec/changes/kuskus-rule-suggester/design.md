@@ -85,7 +85,7 @@ QueryCompletion
 | where isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
 | project Text,
           durationMs      = totimespan(Duration) / 1ms,   // Duration is a timespan ('00:00:01.814')
-          cpuMs           = todouble(TotalCpuMs),          // TotalCpuMs — already ms (TotalCpu.TotalMilliseconds)
+          cpuMs           = TotalCPU / 1ms,               // TotalCPU is a timespan ('00:00:00.4567')
           memoryPeakBytes = MemoryPeak,                    // long, bytes
           scannedRows     = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),  // JSON string
           State, FailureReason, Timestamp

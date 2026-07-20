@@ -29,12 +29,12 @@ offline path with the smallest diff.
 ```
 QueryCompletion
 | where Timestamp > todatetime('<watermark>') and Timestamp <= ago(<LAG>)
-| where isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
+| where isnotempty(RootActivityId) and isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
 | where strlen(Text) < <MAXLEN>
 | top <CAP> by Timestamp asc
-| project id = tostring(RequestId), Text,
+| project id = tostring(RootActivityId), Text,
           durationMs      = totimespan(Duration) / 1ms,
-          cpuMs           = todouble(TotalCpuMs),
+          cpuMs           = TotalCPU / 1ms,
           memoryPeakBytes = tolong(MemoryPeak),
           scannedRows     = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),
           state = State, failureReason = FailureReason, Timestamp
@@ -50,14 +50,14 @@ QueryCompletion
   (`manifest.schema.md`); done in Python so there is one authoritative marker list.
 - `<CAP>`/`<LAG>`/`<MAXLEN>` and the cluster/db are environment-configurable (see Config).
 
-**4. Opaque id: `RequestId`.** A per-execution `RootActivityId` GUID — unique, content-independent,
-OII-safe — is the `<id>`; the row is written to `scratch/<RequestId>.kql`. (The prior design query
+**4. Opaque id: `RootActivityId`.** A per-execution `RootActivityId` GUID — unique, content-independent,
+OII-safe — is the `<id>`; the row is written to `scratch/<RootActivityId>.kql`. (The prior design query
 selected no id column; this closes that gap.) Ids are never derived from query content.
 
 **5. Schema-drift guard (fail-closed).** The cluster's `QueryCompletion` is produced by
 a KustoLogs update policy that is **not in the reference source**, so the parsed column *names* are
 inferred from the emitter. Before the first pull the script runs `QueryCompletion | getschema` and
-asserts the required column set (`RequestId, Text, Duration, TotalCpuMs, MemoryPeak,
+asserts the required column set (`RootActivityId, Text, Duration, TotalCPU, MemoryPeak,
 ScannedExtentsStatistics, State, FailureReason, Timestamp`) is present; on mismatch it exits
 non-zero and prints the live column list so the operator can reconcile the query. This is the
 runtime resolution of the one contract item unverifiable from source.
@@ -100,7 +100,7 @@ fetch-corpus.sh ──(--corpus-path?)──> validate + passthrough        [off
   `rows_to_corpus(rows) -> (files, manifest)`. `test_fetch_corpus.py` feeds a captured v2 primary
   result-table fixture (small JSON, no live cluster) and asserts: `Text` → `scratch/<id>.kql`;
   unit conversions correct; redacted / dialect-marker / oversized rows skipped; `Failed` rows kept
-  (state=="Failed"); `id == RequestId`; no query text on stdout.
+  (state=="Failed"); `id == RootActivityId`; no query text on stdout.
 - The `--corpus-path` passthrough remains the offline **integration** seam already exercised by the
   e2e script.
 - Live-cluster behaviour (auth, getschema, watermark advance) is not unit-tested; it is exercised

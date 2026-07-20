@@ -20,9 +20,11 @@ DEFAULT_CLUSTER = "https://kuskushead.westeurope.kusto.windows.net"
 DEFAULT_MAXLEN = 65536
 REDACTED_PLACEHOLDER = "[Redacted - see confidential Kuskus for full trace]"
 
-# Columns the query depends on; verified live at startup (assert_schema) because
-# the KustoLogs->QueryCompletion parser is not in the reference source.
-REQUIRED_COLUMNS = {"RequestId", "Text", "Duration", "TotalCpuMs", "MemoryPeak",
+# Columns the query depends on; verified live against QueryCompletion on the Kuskus regional
+# members 2026-07-20 (RootActivityId = the ~unique per-query id; TotalCPU is a timespan, converted
+# to ms in build_query). assert_schema re-checks at startup, since this schema is not in the
+# reference source.
+REQUIRED_COLUMNS = {"RootActivityId", "Text", "Duration", "TotalCPU", "MemoryPeak",
                     "ScannedExtentsStatistics", "State", "FailureReason", "Timestamp"}
 
 # Engine-expanded / internal-dialect forms are machine rewrites, not user-authored
@@ -102,12 +104,12 @@ def build_query(watermark, cap, lag, maxlen, bootstrap):
     return (
         "QueryCompletion\n"
         "| where Timestamp > %s and Timestamp <= ago(%s)\n"
-        '| where isnotempty(Text) and Text != "%s"\n'
+        '| where isnotempty(RootActivityId) and isnotempty(Text) and Text != "%s"\n'
         "| where strlen(Text) < %d\n"
         "| top %d by Timestamp asc\n"
-        "| project id = tostring(RequestId), Text,\n"
+        "| project id = tostring(RootActivityId), Text,\n"
         "          durationMs = totimespan(Duration) / 1ms,\n"
-        "          cpuMs = todouble(TotalCpuMs),\n"
+        "          cpuMs = TotalCPU / 1ms,\n"
         "          memoryPeakBytes = tolong(MemoryPeak),\n"
         "          scannedRows = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),\n"
         "          state = State, failureReason = FailureReason, Timestamp"

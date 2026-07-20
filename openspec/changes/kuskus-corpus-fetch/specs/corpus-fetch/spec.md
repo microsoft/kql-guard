@@ -7,7 +7,7 @@ using a **managed identity** and pull `QueryCompletion` rows into `scratch/<id>.
 and a per-`<id>` cost `manifest.json` (`durationMs`, `cpuMs`, `memoryPeakBytes`, `scannedRows`,
 `state`, `failureReason`), matching the existing manifest contract. It SHALL read the cluster,
 database, and limits from the runner environment, and use a
-per-execution activity id (`RequestId`) as `<id>` — never an id derived from query content. The pull
+per-execution activity id (`RootActivityId`) as `<id>` — never an id derived from query content. The pull
 SHALL be bounded to a deterministic sliding window: rows with `Timestamp` after the watermark and
 before a late-ingestion lag, capped to a configurable row count taken oldest-first, and SHALL NOT
 rank or filter by cost (so calibration's baseline is representative). It SHALL drop the redacted
@@ -17,7 +17,7 @@ SHALL retain `state == "Failed"` rows (calibration's failure-catch consumes them
 #### Scenario: Rows become scratch files and a cost manifest
 
 - **WHEN** the fetch pulls a `QueryCompletion` row with text T and cost fields
-- **THEN** `scratch/<RequestId>.kql` contains T and `manifest["<RequestId>"]` contains the cost
+- **THEN** `scratch/<RootActivityId>.kql` contains T and `manifest["<RootActivityId>"]` contains the cost
   numbers plus `state`/`failureReason`, and contains no query text
 
 #### Scenario: The window is cost-agnostic and bounded

@@ -77,7 +77,7 @@ def test_rows_to_corpus(fails):
         fails += check("oversized row skipped", not os.path.exists(os.path.join(d, "eee.kql")))
         with open(os.path.join(d, "aaa.kql")) as f:
             fails += check("scratch/<id>.kql == Text", f.read() == "SecurityEvent | take 5")
-        # Manifest: cost-only, no text, no timestamp; id == RequestId (row id).
+        # Manifest: cost-only, no text, no timestamp; id == RootActivityId (row id).
         fails += check("manifest has 2 entries", set(manifest) == {"aaa", "bbb"})
         fails += check("manifest entry cost-only", manifest["aaa"] == {
             "durationMs": 12.5, "cpuMs": 6.0, "memoryPeakBytes": 2000,
@@ -127,12 +127,12 @@ def test_assert_schema(fails):
         fails += check("full schema passes", True)
     except Exception:
         fails += check("full schema passes", False)
-    truncated = FakeClient(fc.REQUIRED_COLUMNS - {"TotalCpuMs"}, ROWS)
+    truncated = FakeClient(fc.REQUIRED_COLUMNS - {"TotalCPU"}, ROWS)
     try:
         fc.assert_schema(truncated, "Kuskus")
         fails += check("missing column raises", False)
     except Exception as e:
-        fails += check("missing column raises", "TotalCpuMs" in str(e))
+        fails += check("missing column raises", "TotalCPU" in str(e))
     return fails
 
 
