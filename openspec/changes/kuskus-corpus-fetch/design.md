@@ -25,13 +25,16 @@ frame parsing, fragile); Kusto CLI (.NET tool, awkward on a Linux runner).
 fetch_corpus.py`. This preserves every caller (`run-calibration.sh`, `run-mining.sh`) and the
 offline path with the smallest diff.
 
-**3. Pull scope: sliding contiguous window, cost-agnostic, row-capped.**
+**3. Pull scope: sliding contiguous window, cost-agnostic, byte- and row-capped.**
 ```
 QueryCompletion
 | where Timestamp > todatetime('<watermark>') and Timestamp <= ago(<LAG>)
 | where isnotempty(RootActivityId) and isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
 | where strlen(Text) < <MAXLEN>
-| top <CAP> by Timestamp asc
+| order by Timestamp asc
+| extend _cum = row_cumsum(strlen(Text) + strlen(tostring(FailureReason)) + 256)
+| where _cum < <BYTES>
+| take <CAP>
 | project id = tostring(RootActivityId), Text,
           durationMs      = totimespan(Duration) / 1ms,
           cpuMs           = TotalCPU / 1ms,
@@ -42,13 +45,15 @@ QueryCompletion
 - **Cost-agnostic** (not `top by cost`): calibration needs a representative baseline including
   cheap and failed queries; skewing to expensive rows would corrupt the baseline medians and the
   weight-disagreement signal. Mining does its own cost-ranking downstream.
-- `top <CAP> by Timestamp asc` yields a **deterministic oldest-unseen slice**; the watermark then
-  advances to the max `Timestamp` pulled → resumable, gap-free, bounded per run; any backlog
-  catches up over successive runs. `<LAG>` (≈1h) avoids a partial, still-ingesting tail window.
+- `order by Timestamp asc` + a `row_cumsum` **byte budget** (`<BYTES>`, ~40 MB) then `take <CAP>`
+  yields a **deterministic oldest-unseen slice** bounded by result *bytes*, not just rows: `Text`
+  bodies overflow Kusto's 64 MB result cap long before `<CAP>` rows. The watermark then advances to
+  the max `Timestamp` pulled → resumable, gap-free, bounded per run; any backlog catches up over
+  successive runs. `<LAG>` (≈1h) avoids a partial, still-ingesting tail window.
 - One fetch serves both the `calibrate` and `mine` jobs.
 - Expanded/internal-dialect rows are dropped runner-side using the shared marker set
   (`manifest.schema.md`); done in Python so there is one authoritative marker list.
-- `<CAP>`/`<LAG>`/`<MAXLEN>` and the cluster/db are environment-configurable (see Config).
+- `<CAP>`/`<BYTES>`/`<LAG>`/`<MAXLEN>` and the cluster/db are environment-configurable (see Config).
 
 **4. Opaque id: `RootActivityId`.** A per-execution `RootActivityId` GUID — unique, content-independent,
 OII-safe — is the `<id>`; the row is written to `scratch/<RootActivityId>.kql`. (The prior design query
@@ -115,6 +120,7 @@ fetch-corpus.sh ──(--corpus-path?)──> validate + passthrough        [off
 | `KUSKUS_MI_CLIENT_ID` | user-assigned MI client id (unset → system-assigned) | *unset* |
 | `KUSKUS_STATE_DIR` | watermark dir (outside repo) | required |
 | `KUSKUS_FETCH_CAP` | rows per run | `50000` |
+| `KUSKUS_FETCH_BYTES` | max cumulative result bytes/run (guards Kusto's 64 MB cap) | `40000000` |
 | `KUSKUS_FETCH_LAG` | late-ingestion buffer | `1h` |
 | `KUSKUS_FETCH_MAXLEN` | max query text length | `65536` |
 | `KUSKUS_FETCH_BOOTSTRAP` | initial lookback when no watermark | `7d` |

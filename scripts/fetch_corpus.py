@@ -95,25 +95,37 @@ def assert_schema(client, db):
             % (sorted(missing), sorted(cols)))
 
 
-def build_query(watermark, cap, lag, maxlen, bootstrap):
+def build_query(watermark, cap, lag, maxlen, bootstrap, bytes_cap):
     """Deterministic oldest-first window, cost-agnostic (calibration needs a
     representative baseline; mine.py cost-ranks downstream). Unit conversions are
-    done server-side. ponytail: strict `Timestamp >` can skip exact-timestamp ties
-    at the CAP boundary — switch to `>=` with per-id dedup only if volume saturates CAP."""
+    done server-side.
+
+    The result set is bounded by cumulative BYTES (row_cumsum over the serialized
+    oldest-first stream), not just row count: Text bodies overflow Kusto's 64 MB
+    result cap long before `cap` rows, so a row-only `top N` fails at scale. The
+    byte budget keeps a prefix under bytes_cap and the watermark paginates the rest
+    across runs; strlen(FailureReason) (large for Failed rows) + a flat per-row
+    overhead account for the non-Text columns.
+
+    ponytail: strict `Timestamp >` can skip exact-timestamp ties at the window
+    boundary — switch to `>=` with per-id dedup only if a run saturates the cap."""
     lower = "todatetime('%s')" % watermark if watermark else "ago(%s)" % bootstrap
     return (
         "QueryCompletion\n"
         "| where Timestamp > %s and Timestamp <= ago(%s)\n"
         '| where isnotempty(RootActivityId) and isnotempty(Text) and Text != "%s"\n'
         "| where strlen(Text) < %d\n"
-        "| top %d by Timestamp asc\n"
+        "| order by Timestamp asc\n"
+        "| extend _cum = row_cumsum(strlen(Text) + strlen(tostring(FailureReason)) + 256)\n"
+        "| where _cum < %d\n"
+        "| take %d\n"
         "| project id = tostring(RootActivityId), Text,\n"
         "          durationMs = totimespan(Duration) / 1ms,\n"
         "          cpuMs = TotalCPU / 1ms,\n"
         "          memoryPeakBytes = tolong(MemoryPeak),\n"
         "          scannedRows = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),\n"
         "          state = State, failureReason = FailureReason, Timestamp"
-        % (lower, lag, REDACTED_PLACEHOLDER, maxlen, cap)
+        % (lower, lag, REDACTED_PLACEHOLDER, maxlen, bytes_cap, cap)
     )
 
 
@@ -142,13 +154,14 @@ def main(argv, client=None):
     lag = os.environ.get("KUSKUS_FETCH_LAG", "1h")
     maxlen = int(os.environ.get("KUSKUS_FETCH_MAXLEN", str(DEFAULT_MAXLEN)))
     bootstrap = os.environ.get("KUSKUS_FETCH_BOOTSTRAP", "7d")
+    bytes_cap = int(os.environ.get("KUSKUS_FETCH_BYTES", "40000000"))  # ~40 MB, under Kusto's 64 MB result cap
     scratch, manifest_path = "scratch", "manifest.json"
 
     if client is None:
         client = connect(cluster, client_id)
     try:
         assert_schema(client, db)
-        rows = execute(client, db, build_query(read_watermark(state_dir), cap, lag, maxlen, bootstrap))
+        rows = execute(client, db, build_query(read_watermark(state_dir), cap, lag, maxlen, bootstrap, bytes_cap))
         manifest, max_ts = rows_to_corpus(rows, scratch, maxlen)
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2, sort_keys=True)
