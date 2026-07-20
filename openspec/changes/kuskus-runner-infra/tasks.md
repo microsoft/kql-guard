@@ -11,8 +11,8 @@
 
 ## 3. Runner VM provisioning (cloud-init)
 
-- [x] 3.1 `infra/terraform/runner-init.sh.tftpl` (VM cloud-init): install the GitHub Actions runner agent + `az`, `python3` + `azure-kusto-data` (pinned), `gh`, `jq`; write the `KUSKUS_*` job `.env`; register the runner (label `kuskus`) once with the one-time token as a systemd service. ponytail: no image/ACR — install on the VM.
-- [x] 3.2 Offline check: render the template with the var map + `bash -n` the result (valid shell, all `${}` placeholders resolve). ponytail: no .NET SDK — the scanner is downloaded per run.
+- [x] 3.1 `infra/terraform/runner-init.sh.tftpl` (VM cloud-init): install the GitHub Actions runner agent + `az`, `python3` + `azure-kusto-data` (pinned), `gh`, `jq`, and the **.NET SDK** (via dotnet-install; NativeAOT prereqs `clang` + `zlib1g-dev`); write the `KUSKUS_*` job `.env`; register the runner (label `kuskus`) once with the one-time token as a systemd service. ponytail: no image/ACR — install on the VM.
+- [x] 3.2 Offline check: render the template with the var map + `bash -n` the result (valid shell, all `${}` placeholders resolve). ponytail: SDK via the official dotnet-install script — the scanner builds from HEAD per run (carries `--shapes`; validate can compile a drafted rule).
 
 ## 4. Networking + runner VM
 
@@ -27,7 +27,7 @@
 
 ## 6. Workflow restructure (`kuskus-report.yml`)
 
-- [x] 6.1 Merge `calibrate` + `mine` into one `run` job (`runs-on: [self-hosted, kuskus]`): checkout → `gh release download kql-guard-linux-x64` → watermark-in → `scripts/fetch-corpus.sh` (real fetch) → `scripts/run-calibration.sh` → `scripts/run-mining.sh` → watermark-out. Keep the `apply`/`corpus_path` dispatch inputs.
+- [x] 6.1 Merge `calibrate` + `mine` into one `run` job (`runs-on: [self-hosted, kuskus]`): checkout → `dotnet build -c Debug` (scanner from HEAD) → watermark-in → `scripts/fetch-corpus.sh` (real fetch) → `scripts/run-calibration.sh` → `scripts/run-mining.sh` → watermark-out. Keep the `apply`/`corpus_path` dispatch inputs.
 - [x] 6.2 Watermark blob sync: before fetch, `az storage blob download -c kuskus-state -n watermark.txt -f "$KUSKUS_STATE_DIR/watermark.txt"` (tolerate not-found → fetch bootstraps); after a successful fetch step (`if: success()`), `az storage blob upload --overwrite ...` the same file.
 - [x] 6.3 Update the deferred-integrations header note: the fetch is live; the AI suggester remains deferred (mock covers mining).
 - [x] 6.4 Cross-ref: the fetch **unstub semantics** live in `kuskus-corpus-fetch` §6; this change owns the **job-merge + blob sync + release-download**. Implement `kuskus-report.yml` once, coherently, covering both.

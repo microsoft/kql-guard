@@ -18,13 +18,15 @@ decision 1). This change provisions that runner via infrastructure-as-code.
   Contributor on `kuskus-state`. Remote state lives in the storage account (`azurerm` backend); a
   one-time `az` command bootstraps that account.
 - Add **`infra/terraform/runner-init.sh.tftpl`**: the VM cloud-init = install the GitHub Actions runner
-  agent + `az`, `python3` + `azure-kusto-data`, `gh`, `jq` (no .NET SDK); write the `KUSKUS_*` job
+  agent + `az`, `python3` + `azure-kusto-data`, `gh`, `jq`, and the **.NET SDK** (NativeAOT prereqs
+  `clang` + `zlib1g-dev`) so the runner builds kql-guard from source; write the `KUSKUS_*` job
   `.env`; register the runner with a one-time token.
 - **Restructure `kuskus-report.yml`**: merge the two jobs (`calibrate`, `mine`) into **one** job
   (single corpus fetch, single watermark advance, shared scratch); wrap the fetch with
   **durable-watermark sync** (`az storage blob download`/`upload` around the fetch on the
-  `kuskus-state` container); obtain the scanner via **`gh release download kql-guard-linux-x64`** (no
-  build step); add a final **`if: always()` scrub** of `scratch/` (the VM workspace is reused, so the
+  `kuskus-state` container); **build the scanner from HEAD** (`dotnet build -c Debug`, so it carries
+  `--shapes` and matches the source under review — and `validate-candidate.sh` can compile a drafted
+  rule); add a final **`if: always()` scrub** of `scratch/` (the VM workspace is reused, so the
   corpus must be deleted explicitly to honor the trust boundary).
 - **Auth**: a **one-time runner registration token** (minted at apply, consumed at first boot) — no
   durable GitHub secret on the VM. (History: GitHub App → PAT → persistent VM; the org blocks a durable

@@ -19,9 +19,9 @@ done
 scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"
 
 # 2. kql-guard over the corpus. Exit 1 is expected when queries carry errors;
-#    the JSON is still written, so ignore the exit code here. On the runner,
-#    KQLGUARD_BIN points at the downloaded NativeAOT binary (no .NET SDK);
-#    locally it is unset, so we build + run the Debug dll as before.
+#    the JSON is still written, so ignore the exit code here. KQLGUARD_BIN is an
+#    optional prebuilt-binary override; unset — on the runner and in CI — we
+#    build + run the Debug dll with the SDK.
 if [[ -n "${KQLGUARD_BIN:-}" ]]; then
   SCANNER=("$KQLGUARD_BIN")
 else

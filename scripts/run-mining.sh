@@ -20,17 +20,18 @@ while [[ $# -gt 0 ]]; do
 done
 : "${CORPUS:?--corpus-path required}"; : "${MANIFEST:?--manifest required}"
 
-DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"  # net10 at ~/.dotnet, else PATH (CI)
-
 # 1. Validate/pass-through the corpus materialized by the fetch step.
 scripts/fetch-corpus.sh --corpus-path "$CORPUS" --manifest "$MANIFEST"
 
 # 2. Analyze with shapes. A nonzero exit on query errors is expected; the JSON
-#    report is still written. On the runner, KQLGUARD_BIN points at the
-#    downloaded NativeAOT binary (no .NET SDK); locally we build + run the dll.
+#    report is still written. KQLGUARD_BIN is an optional prebuilt-binary
+#    override (local/offline); unset — on the runner and in CI — we build + run
+#    the Debug dll with the SDK. Resolve DOTNET only in that branch so a set -e
+#    run with KQLGUARD_BIN set never aborts on a missing SDK.
 if [[ -n "${KQLGUARD_BIN:-}" ]]; then
   SCANNER=("$KQLGUARD_BIN")
 else
+  DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"  # net10 at ~/.dotnet, else PATH
   BIN="bin/Debug/net10.0/kql-guard.dll"
   [[ -f "$BIN" ]] || "$DOTNET" build -c Debug >/dev/null
   SCANNER=("$DOTNET" "$BIN")

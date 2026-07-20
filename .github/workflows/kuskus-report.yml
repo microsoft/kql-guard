@@ -38,15 +38,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download shipped kql-guard scanner
+      - name: Build kql-guard scanner from source
         run: |
           # KUSKUS_STATE_DIR is set here (not job env): the `runner` context is
           # unavailable at job level, and $RUNNER_TEMP is only a step shell var.
           echo "KUSKUS_STATE_DIR=$RUNNER_TEMP/kuskus-state" >> "$GITHUB_ENV"
-          gh release download --repo "$GITHUB_REPOSITORY" \
-            --pattern 'kql-guard-linux-x64' --dir . --clobber
-          chmod +x kql-guard-linux-x64
-          echo "KQLGUARD_BIN=$PWD/kql-guard-linux-x64" >> "$GITHUB_ENV"
+          # Build from HEAD so the scanner matches the source under review and
+          # carries --shapes (the shipped release predates it). KQLGUARD_BIN
+          # stays unset, so run-calibration/run-mining reuse this Debug dll via
+          # the runner's SDK, and validate-candidate.sh can compile a new rule.
+          dotnet build -c Debug
 
       - name: Fetch corpus + cost manifest
         id: fetch

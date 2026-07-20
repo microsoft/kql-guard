@@ -14,6 +14,8 @@ locals {
   runner_label = "kuskus"
   # Pinned to the runner-only dependency in scripts/manifest.schema.md.
   azure_kusto_data_version = "6.0.4"
+  # .NET SDK channel the runner installs to build kql-guard from source (net10).
+  dotnet_channel = "10.0"
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -162,6 +164,7 @@ resource "azurerm_linux_virtual_machine" "runner" {
     labels                   = local.runner_label
     runner_name              = "${var.name_prefix}-vm"
     azure_kusto_data_version = local.azure_kusto_data_version
+    dotnet_channel           = local.dotnet_channel
     kuskus_cluster           = var.kuskus_cluster
     kuskus_database          = var.kuskus_database
     mi_client_id             = azurerm_user_assigned_identity.runner.client_id
