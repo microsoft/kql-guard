@@ -46,7 +46,7 @@ public static class Rules
         new("KQL009", "UnboundedMvExpand",
             "'mv-expand' with no 'limit' can explode row counts; add 'limit N' to cap fan-out.", "warning", 3),
         new("KQL010", "CrossClusterQuery",
-            "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
+            "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 1),
         new("KQL011", "UnboundedSort",
             "'sort'/'order by' with no following 'take'/'top' materializes and sorts the whole result; cap it with 'take N' or use 'top N'.", "warning", 2),
         new("KQL012", "CaseFoldEquality",
