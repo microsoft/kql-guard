@@ -100,12 +100,15 @@ def build_query(watermark, cap, lag, maxlen, bootstrap, bytes_cap):
     representative baseline; mine.py cost-ranks downstream). Unit conversions are
     done server-side.
 
-    The result set is bounded by cumulative BYTES (row_cumsum over the serialized
-    oldest-first stream), not just row count: Text bodies overflow Kusto's 64 MB
-    result cap long before `cap` rows, so a row-only `top N` fails at scale. The
-    byte budget keeps a prefix under bytes_cap and the watermark paginates the rest
-    across runs; strlen(FailureReason) (large for Failed rows) + a flat per-row
-    overhead account for the non-Text columns.
+    Two independent bounds keep each run inside Kusto's limits:
+      1. `top cap by Timestamp asc` — a BOUNDED partial sort (O(cap) heap), so it
+         grabs the oldest `cap` rows without a global `order by`, which would blow
+         the 5 GB sort-memory budget on the multi-million-row regional window.
+      2. row_cumsum byte budget — Text bodies overflow Kusto's 64 MB *result* cap
+         long before `cap` rows, so trim the oldest prefix to < bytes_cap bytes
+         (strlen(FailureReason), large for Failed rows, + a flat per-row overhead
+         cover the non-Text columns). `serialize` guarantees row_cumsum's input
+         ordering. The watermark paginates the remainder across runs.
 
     ponytail: strict `Timestamp >` can skip exact-timestamp ties at the window
     boundary — switch to `>=` with per-id dedup only if a run saturates the cap."""
@@ -115,17 +118,17 @@ def build_query(watermark, cap, lag, maxlen, bootstrap, bytes_cap):
         "| where Timestamp > %s and Timestamp <= ago(%s)\n"
         '| where isnotempty(RootActivityId) and isnotempty(Text) and Text != "%s"\n'
         "| where strlen(Text) < %d\n"
-        "| order by Timestamp asc\n"
+        "| top %d by Timestamp asc\n"
+        "| serialize\n"
         "| extend _cum = row_cumsum(strlen(Text) + strlen(tostring(FailureReason)) + 256)\n"
         "| where _cum < %d\n"
-        "| take %d\n"
         "| project id = tostring(RootActivityId), Text,\n"
         "          durationMs = totimespan(Duration) / 1ms,\n"
         "          cpuMs = TotalCPU / 1ms,\n"
         "          memoryPeakBytes = tolong(MemoryPeak),\n"
         "          scannedRows = tolong(todynamic(ScannedExtentsStatistics).ScannedRowsCount),\n"
         "          state = State, failureReason = FailureReason, Timestamp"
-        % (lower, lag, REDACTED_PLACEHOLDER, maxlen, bytes_cap, cap)
+        % (lower, lag, REDACTED_PLACEHOLDER, maxlen, cap, bytes_cap)
     )
 
 

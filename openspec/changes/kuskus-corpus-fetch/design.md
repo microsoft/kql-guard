@@ -31,10 +31,10 @@ QueryCompletion
 | where Timestamp > todatetime('<watermark>') and Timestamp <= ago(<LAG>)
 | where isnotempty(RootActivityId) and isnotempty(Text) and Text != "[Redacted - see confidential Kuskus for full trace]"
 | where strlen(Text) < <MAXLEN>
-| order by Timestamp asc
+| top <CAP> by Timestamp asc
+| serialize
 | extend _cum = row_cumsum(strlen(Text) + strlen(tostring(FailureReason)) + 256)
 | where _cum < <BYTES>
-| take <CAP>
 | project id = tostring(RootActivityId), Text,
           durationMs      = totimespan(Duration) / 1ms,
           cpuMs           = TotalCPU / 1ms,
@@ -45,11 +45,13 @@ QueryCompletion
 - **Cost-agnostic** (not `top by cost`): calibration needs a representative baseline including
   cheap and failed queries; skewing to expensive rows would corrupt the baseline medians and the
   weight-disagreement signal. Mining does its own cost-ranking downstream.
-- `order by Timestamp asc` + a `row_cumsum` **byte budget** (`<BYTES>`, ~40 MB) then `take <CAP>`
-  yields a **deterministic oldest-unseen slice** bounded by result *bytes*, not just rows: `Text`
-  bodies overflow Kusto's 64 MB result cap long before `<CAP>` rows. The watermark then advances to
-  the max `Timestamp` pulled → resumable, gap-free, bounded per run; any backlog catches up over
-  successive runs. `<LAG>` (≈1h) avoids a partial, still-ingesting tail window.
+- `top <CAP> by Timestamp asc` (a **bounded** partial sort, O(CAP) heap — a global `order by` over
+  the multi-million-row regional window overruns the 5 GB sort-memory budget) then a `row_cumsum`
+  **byte budget** (`<BYTES>`, ~40 MB) yields a **deterministic oldest-unseen slice** bounded by both
+  rows *and* result bytes: `Text` bodies overflow Kusto's 64 MB result cap long before `<CAP>` rows.
+  The watermark then advances to the max `Timestamp` pulled → resumable, gap-free, bounded per run;
+  any backlog catches up over successive runs. `<LAG>` (≈1h) avoids a partial, still-ingesting tail
+  window.
 - One fetch serves both the `calibrate` and `mine` jobs.
 - Expanded/internal-dialect rows are dropped runner-side using the shared marker set
   (`manifest.schema.md`); done in Python so there is one authoritative marker list.
