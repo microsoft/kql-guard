@@ -168,5 +168,7 @@ python3 scripts/test_apply_candidate.py || fails=$((fails+1))
 bash    scripts/test_validate_candidate.sh || fails=$((fails+1))
 bash    scripts/test_publish_candidate.sh || fails=$((fails+1))
 
+assert_contains "KQL014 facet" "KQL014" "$(RUN $S/facet.kql)"
+
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi

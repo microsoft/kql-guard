@@ -53,6 +53,8 @@ public static class Rules
             "tolower()/toupper() around an equality defeats the index; use the case-insensitive '=~' operator instead.", "warning", 2),
         new("KQL013", "NonDeterministicTake",
             "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order so results are reproducible.", "warning", 1),
+        new("KQL014", "UnboundedFacet",
+            "'facet' computes a per-column breakdown and can be expensive; scope or remove it.", "warning", 2),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -302,6 +304,13 @@ public static class CostAnalyzer
                         "No project/summarize/take; reduce columns and rows early to cut memory and cost.", tableName));
                 }
             }
+        }
+
+        // KQL014: 'facet' computes a per-column breakdown and can be expensive.
+        foreach (var facet in root.GetDescendants<FacetOperator>())
+        {
+            violations.Add(Make(code, filePath, facet.TextStart, "KQL014",
+                "'facet' computes a breakdown per column and is expensive; scope or remove it."));
         }
 
         return violations;

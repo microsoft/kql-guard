@@ -1,0 +1,4 @@
+// KQL014: facet
+SyntheticEvents
+| where StartTime > ago(1d)
+| facet by Category
