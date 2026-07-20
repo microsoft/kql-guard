@@ -58,6 +58,11 @@ ${EVIDENCE}
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 EOF
 git push -u origin "${BRANCH}"
-gh pr create --head "${BRANCH}" \
-  --title "feat(${RULE_ID}): new rule from Kuskus shape mining" \
-  --body "${EVIDENCE} Human review required before merge."
+# Org policy blocks Actions from opening PRs, so surface the compare link for a
+# human to open (their PR triggers CI; the single commit message pre-fills it).
+# already_proposed()'s remote-branch probe keeps this idempotent until the PR
+# is opened/merged.
+url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-microsoft/kql-guard}/compare/main...${BRANCH}?expand=1"
+echo "publish-candidate: pushed ${BRANCH} — open a PR: ${url}"
+[[ -n "${GITHUB_STEP_SUMMARY:-}" ]] &&
+  printf -- '- new rule **%s** (%s): [open PR](%s)\n' "$RULE_ID" "$BRANCH" "$url" >> "$GITHUB_STEP_SUMMARY"

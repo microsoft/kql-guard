@@ -34,14 +34,11 @@ jobs:
   run:
     runs-on: [self-hosted, kuskus]
     env:
-      # PR creation on the --apply path: the default GITHUB_TOKEN cannot open
-      # PRs when the org locks "Allow Actions to create and approve pull
-      # requests" (greyed out here), so use a provisioned token (fine-grained
-      # PAT — or a GitHub App installation token — with contents:write +
-      # pull-requests:write on this repo), stored as the KUSKUS_PR_TOKEN secret.
-      # Falls back to github.token when the secret is absent; dry-run/cron never
-      # call gh, so they're unaffected either way.
-      GH_TOKEN: ${{ secrets.KUSKUS_PR_TOKEN || github.token }}
+      # gh only *reads* PR state for idempotency here (github.token suffices).
+      # PR *creation* is done by a human from the pushed branch — the org blocks
+      # Actions from opening PRs and caps tokens at 8 days, so there's no
+      # elevated token to use; see propose-weight.sh / publish-candidate.sh.
+      GH_TOKEN: ${{ github.token }}
       # Identity for the mechanical --apply commits (propose-weight.sh /
       # publish-candidate.sh). The persistent runner has no git user config, so
       # `git commit` aborts with exit 128 ("empty ident name"). Set it via env
