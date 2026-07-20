@@ -40,7 +40,7 @@ public static class Rules
         new("KQL006", "UnwindowedJoin",
             "'join' with no time-range filter materializes full tables; add a time window before joining.", "warning", 3),
         new("KQL007", "RegexHeavyOperation",
-            "Regex operations (matches regex / extract / parse kind=regex) are CPU-heavy; prefer 'has'/parse simple where possible.", "warning", 2),
+            "Regex operations (matches regex / extract / parse kind=regex) are CPU-heavy; prefer 'has'/parse simple where possible.", "warning", 3),
         new("KQL008", "NoColumnOrRowReduction",
             "Query returns table rows with no project/summarize/take; it keeps every column and row in memory.", "warning", 1),
         new("KQL009", "UnboundedMvExpand",
