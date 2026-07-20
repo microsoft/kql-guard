@@ -38,7 +38,7 @@ Top to bottom; each item links to its section. Everything before §5 is one-time
 - [ ] **§1 Bootstrap remote state** — run the block; keep the printed `STATE_ACCOUNT`.
 - [ ] **§2 Runner registration token** — mint a one-time token (valid ~1h); it's consumed at first boot.
 - [ ] **§3 `terraform apply`** — `init -backend-config=...` then `apply` (token + SSH key via `TF_VAR_*`).
-- [ ] **§4 Kuskus grant** — send `terraform output -raw kuskus_viewer_grant_command` to the Kuskus team.
+- [ ] **§4 Kuskus grant** — run `terraform output -raw kuskus_viewer_grant_command` on a **regional** Kuskus cluster (e.g. `kuskusweu.westeurope`, **not** `kuskushead`), yourself or via the Kuskus team.
 - [ ] **§5 Smoke** — dispatch (dry run); verify the runner picks it up, the watermark advances, no query text in any log.
 
 ## 1. One-time remote-state bootstrap
@@ -115,14 +115,27 @@ it shows **Online** under repo Settings → Actions → Runners (label `kuskus`)
 
 ## 4. Grant the MI viewer on Kuskus (out-of-band)
 
-`kuskushead` is an internal cluster not ARM-managed by this subscription, so Terraform can't grant it.
-Send this to the Kuskus team (from `terraform output -raw kuskus_viewer_grant_command`):
+`kuskushead`'s `QueryCompletion` is **not a table** — it's a `best_effort` **macro-expand** function
+that fans out over the `Kuskus` entity_group (~20 **regional** clusters: `kuskusweu.westeurope`,
+`kuskuseus.eastus`, `kuskuseas.eastasia`, …). The query data lives on those regional clusters;
+`kuskushead` holds only the fan-out function. So the MI must be a viewer on a **regional** cluster's
+`Kuskus` DB — **granting on `kuskushead` is not enough** (the fan-out then has zero readable members
+and fails with `SEM0529: macro-expand … at least one operand`).
+
+Because the function is `best_effort=true`, viewer on **one** regional cluster suffices — that region's
+queries flow through and inaccessible regions are silently skipped. Recommended: `kuskusweu.westeurope`
+(co-located with the runner). Grant on more regionals to widen coverage; no code change needed.
+
+Run this (from `terraform output -raw kuskus_viewer_grant_command`) **on a regional cluster**
+— e.g. `https://kuskusweu.westeurope.kusto.windows.net`, **not** `kuskushead` — yourself if you have
+regional admin, else via the Kuskus team:
 
 ```kusto
 .add database Kuskus viewers ('aadapp=<mi-client-id>;<tenant-id>')
 ```
 
-Until it lands, the pipeline fails closed at auth / the `getschema` guard — no partial output.
+Until at least one regional grant lands, the pipeline fails closed at the `getschema` guard
+(`SEM0529`) — no partial output.
 
 ## 5. First-run smoke (manual, not in CI)
 

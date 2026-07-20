@@ -23,9 +23,11 @@ output "storage_account" {
   value       = azurerm_storage_account.state.name
 }
 
-# Copy-paste this on the Kuskus cluster to grant the MI viewer on the database
-# (Terraform cannot: the cluster is not ARM-managed by this subscription, D8).
+# Copy-paste this on a REGIONAL Kuskus cluster (e.g. kuskusweu.westeurope) — NOT kuskushead, which
+# holds only the best_effort macro-expand function (QueryCompletion data lives on the ~20 regional
+# entity_group members). One regional grant suffices; see infra/README.md §4. Terraform cannot run it
+# (the cluster is not ARM-managed by this subscription, D8).
 output "kuskus_viewer_grant_command" {
-  description = "Out-of-band grant to request from the Kuskus team."
+  description = "Out-of-band grant — run on a REGIONAL Kuskus cluster (e.g. kuskusweu.westeurope), not kuskushead. See infra/README §4."
   value       = ".add database ${var.kuskus_database} viewers ('aadapp=${azurerm_user_assigned_identity.runner.client_id};${data.azurerm_client_config.current.tenant_id}')"
 }
