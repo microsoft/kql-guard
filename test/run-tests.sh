@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Self-check for kql-guard's static analysis rules. No framework: each sample is
 # a single query that should trigger exactly one rule (or none, for clean.kql).
-# Run: ./test/run-tests.sh   (builds Debug first if needed)
+# Run: ./test/run-tests.sh   (always builds Debug first; incremental)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 BIN="bin/Debug/net10.0/kql-guard.dll"
-if [[ ! -f "$BIN" ]]; then
-  dotnet build -c Debug >/dev/null || { echo "build failed"; exit 1; }
-fi
+# Always build: dotnet's incremental up-to-date check is fast on a no-op and
+# rebuilds when sources change. A bare `[[ -f $BIN ]]` guard would reuse a
+# stale binary after a branch switch and silently test the wrong code.
+dotnet build -c Debug >/dev/null || { echo "build failed"; exit 1; }
 RUN() { dotnet "$BIN" "$@" 2>&1; }
 
 fails=0
