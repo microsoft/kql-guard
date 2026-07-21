@@ -33,8 +33,12 @@ def apply(candidate, root="."):
     rule_line = (f'        new("{cid}", "{name}",\n'
                  f'            "{candidate["shortDescription"]}", "{candidate["level"]}", {int(candidate["weight"])}),')
     src, _ = _insert_once(src, RULES_ANCHOR, "\n" + rule_line, f'new("{cid}"')
+    # Idempotency marker is the WHOLE analyzerBlock, not its first line: a new
+    # rule can share its `foreach (var x in root.GetDescendants<T>())` opening
+    # with an existing rule (same T), and a first-line check would then wrongly
+    # skip insertion — registry entry, no detector, silent non-firing.
     src, _ = _insert_once(src, ANALYZE_ANCHOR, candidate["analyzerBlock"] + "\n",
-                          candidate["analyzerBlock"].strip().splitlines()[0].strip())
+                          candidate["analyzerBlock"].strip())
     open(cost_path, "w", encoding="utf-8").write(src)
 
     sample_path = os.path.join(root, "samples", "cost", slug + ".kql")

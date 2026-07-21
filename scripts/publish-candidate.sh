@@ -49,6 +49,21 @@ BASE=$(git rev-parse HEAD)
 trap 'git switch --detach "$BASE" >/dev/null 2>&1 || true' EXIT
 git switch -c "${BRANCH}" "${BASE}"
 python3 scripts/apply-candidate.py "$CAND"
+# Canonicalize the generated sample so the opened PR passes the `fmt --check` CI
+# gate: the drafter emits the sample on one line and apply-candidate.py can't
+# format without the scanner. Reuse the scanner run-mining.sh already built
+# (KQLGUARD_BIN override, else the Debug dll). Best-effort — a formatting hiccup
+# should not withhold an otherwise-validated rule; CI would still flag it.
+SLUG=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sampleSlug"])' "$CAND")
+if [[ -n "${KQLGUARD_BIN:-}" ]]; then
+  FMT=("$KQLGUARD_BIN")
+elif [[ -f bin/Debug/net10.0/kql-guard.dll ]]; then
+  DOTNET="${DOTNET:-$([[ -x "$HOME/.dotnet/dotnet" ]] && echo "$HOME/.dotnet/dotnet" || command -v dotnet)}"
+  FMT=("$DOTNET" bin/Debug/net10.0/kql-guard.dll)
+else
+  FMT=()
+fi
+[[ ${#FMT[@]} -gt 0 ]] && "${FMT[@]}" fmt "samples/cost/${SLUG}.kql" --write || true
 git add -A
 git commit -F - <<EOF
 feat(${RULE_ID}): new rule from Kuskus shape mining

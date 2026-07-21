@@ -35,35 +35,86 @@ AOAI_SCOPE = "https://cognitiveservices.azure.com"
 DEFAULT_API_VERSION = "2025-04-01-preview"
 LEVELS = {"warning", "error"}
 
+# The closed set of concrete Kusto.Language 12.4.0 syntax node types a cost rule
+# may target: every *Operator + *Expression SyntaxElement subtype. The model must
+# pick GetDescendants<T> from THIS list. Left unconstrained it invents plausible
+# but nonexistent names (observed: "InCsExpression" for the `in` operator, which
+# is really "InExpression") that fail the C# build three gates downstream.
+# Regenerate on a Kusto.Language bump: load the pinned Kusto.Language.dll and take
+# every public non-abstract type where SyntaxElement.IsAssignableFrom(t) and the
+# name ends with "Operator" or "Expression".
+NODE_TYPES = (
+    "AsOperator", "AssertSchemaOperator", "AtExpression",
+    "BadQueryOperator", "BetweenExpression", "BinaryExpression",
+    "BracketedExpression", "CompoundNamedExpression",
+    "CompoundStringLiteralExpression", "ConsumeOperator",
+    "ContextualDataTableExpression", "CountOperator", "DataScopeExpression",
+    "DataTableExpression", "DistinctOperator", "DynamicExpression",
+    "ElementExpression", "EvaluateOperator", "ExecuteAndCacheOperator",
+    "ExtendOperator", "ExternalDataExpression", "FacetOperator",
+    "FilterOperator", "FindOperator", "ForkExpression", "ForkOperator",
+    "FunctionCallExpression", "GetSchemaOperator",
+    "GraphMarkComponentsOperator", "GraphMatchOperator",
+    "GraphShortestPathsOperator", "GraphToTableOperator",
+    "GraphWhereEdgesOperator", "GraphWhereNodesOperator",
+    "HasAllExpression", "HasAnyExpression", "InExpression",
+    "InlineExternalTableExpression", "InvokeOperator", "JoinOperator",
+    "JsonArrayExpression", "JsonObjectExpression", "LiteralExpression",
+    "LookupOperator", "MacroExpandOperator", "MakeGraphOperator",
+    "MakeSeriesExpression", "MakeSeriesOperator", "MaterializeExpression",
+    "MaterializedViewCombineExpression", "MvApplyExpression",
+    "MvApplyOperator", "MvApplySubqueryExpression", "MvExpandExpression",
+    "MvExpandOperator", "OrderedExpression", "PackExpression",
+    "ParenthesizedExpression", "ParseKvOperator", "ParseOperator",
+    "ParseWhereOperator", "PartitionByOperator", "PartitionOperator",
+    "PathExpression", "PipeExpression", "PrefixUnaryExpression",
+    "PrimitiveTypeExpression", "PrintOperator", "ProjectAwayOperator",
+    "ProjectByNamesOperator", "ProjectKeepOperator", "ProjectOperator",
+    "ProjectRenameOperator", "ProjectReorderOperator", "RangeOperator",
+    "ReduceByOperator", "RenderOperator", "SampleDistinctOperator",
+    "SampleOperator", "ScanOperator", "SchemaTypeExpression",
+    "SearchOperator", "SerializeOperator", "SimpleNamedExpression",
+    "SortOperator", "StarExpression", "SummarizeOperator", "TakeOperator",
+    "ToScalarExpression", "ToTableExpression", "TopHittersOperator",
+    "TopNestedOperator", "TopOperator", "TypeOfLiteralExpression",
+    "UnionOperator",
+)
+
 # Two existing rules as few-shot exemplars of the required analyzer-block shape
 # (single GetDescendants + Make, mirroring CostRules.cs KQL002/004/005/007).
 # Inlined so the adapter has no parse dependency on the C# source.
 FEW_SHOT = [
     {
-        "name": "UnboundedSort",
+        "name": "UnboundedDistinct",
         "level": "warning",
         "weight": 2,
         "analyzerBlock": (
-            "        foreach (var sort in root.GetDescendants<SortOperator>())\n"
+            "        foreach (var x in root.GetDescendants<DistinctOperator>())\n"
             "        {\n"
-            "            violations.Add(Make(code, filePath, sort.TextStart, \"KQLNNN\",\n"
-            "                \"'sort' without a following 'take'/'top' orders the whole result; add a bound.\"));\n"
+            "            if (root.GetDescendants<TakeOperator>().Count == 0)\n"
+            "            {\n"
+            "                violations.Add(Make(code, filePath, x.TextStart, \"KQLNNN\",\n"
+            "                    \"'distinct' over an unbounded input scans every row; add a 'take'/'top' bound or pre-aggregate.\"));\n"
+            "            }\n"
             "        }\n"
         ),
-        "sample": "// unbounded sort\nSyntheticEvents\n| sort by StartTime desc\n",
+        "sample": "// unbounded distinct\nSyntheticEvents\n| distinct Category\n",
     },
     {
-        "name": "UnboundedMvExpand",
+        "name": "ExpensiveEvaluatePlugin",
         "level": "warning",
         "weight": 2,
         "analyzerBlock": (
-            "        foreach (var mv in root.GetDescendants<MvExpandOperator>())\n"
+            "        foreach (var x in root.GetDescendants<EvaluateOperator>())\n"
             "        {\n"
-            "            violations.Add(Make(code, filePath, mv.TextStart, \"KQLNNN\",\n"
-            "                \"'mv-expand' without 'limit' can explode row count; add a bound.\"));\n"
+            "            if (x.ToString().Contains(\"bag_unpack\", StringComparison.OrdinalIgnoreCase))\n"
+            "            {\n"
+            "                violations.Add(Make(code, filePath, x.TextStart, \"KQLNNN\",\n"
+            "                    \"'evaluate bag_unpack' materializes dynamic columns and can be expensive; project only the keys you need.\"));\n"
+            "            }\n"
             "        }\n"
         ),
-        "sample": "// unbounded mv-expand\nSyntheticEvents\n| mv-expand Tags\n",
+        "sample": "// expensive evaluate plugin\nSyntheticEvents\n| evaluate bag_unpack(Payload)\n",
     },
 ]
 
@@ -85,16 +136,31 @@ def build_messages(inp, assigned_id):
         "Hard constraints:\n"
         f"- The rule id is FIXED to {assigned_id}. Use it verbatim wherever an id "
         "appears (you do not choose it).\n"
-        "- analyzerBlock MUST be exactly one C# foreach of the form "
-        "`foreach (var x in root.GetDescendants<SomeOperator>()) { "
-        "violations.Add(Make(code, filePath, x.TextStart, \"" + assigned_id +
-        "\", \"<message>\")); }`, using a real Kusto.Language syntax node type "
-        "for the most expensive structural feature of the shape.\n"
+        "- analyzerBlock MUST be one C# foreach over root.GetDescendants<T>() "
+        "that flags ONLY the expensive pattern through an `if` GUARD inside the "
+        "loop; it MUST NOT flag every match. The rule has to be SPECIFIC: it "
+        "must stay silent on ordinary, well-written queries and fire only on the "
+        "costly variant (an unconditional rule that flags every T is WRONG and "
+        "will be rejected). Form: `foreach (var x in root.GetDescendants<T>()) "
+        "{ if (<condition>) { violations.Add(Make(code, filePath, x.TextStart, "
+        "\"" + assigned_id + "\", \"<message>\")); } }`. Prefer a robust "
+        "condition that needs no deep API knowledge, e.g. "
+        "`x.ToString().Contains(\"<kql-keyword>\", "
+        "StringComparison.OrdinalIgnoreCase)` (optionally negated with !) or the "
+        "absence/presence of a bounding operator via "
+        "`root.GetDescendants<AllowedType>().Count == 0`.\n"
+        "- T (and any type you pass to GetDescendants<> in the condition) MUST "
+        "be copied VERBATIM from the ALLOWED_NODE_TYPES list below (never "
+        "invent, abbreviate, or add a suffix to a name — there is no "
+        "'InCsExpression'; the `in` operator is 'InExpression'). Choose the T "
+        "matching the most expensive structural feature of the shape.\n"
         "- sample MUST be synthetic KQL: invented table and column names, NO real "
         "identifiers or literal values, and it MUST trigger the rule.\n"
         "- sampleSlug MUST be kebab-case (lowercase letters, digits, hyphens).\n"
         "- level MUST be 'warning' or 'error'; weight MUST be a small positive "
         "integer.\n"
+        "ALLOWED_NODE_TYPES (Kusto.Language syntax node types; use exactly ONE, "
+        "verbatim, as T):\n" + ", ".join(NODE_TYPES) + "\n"
         "Examples of good rules (analyzerBlock id shown as KQLNNN for the shape "
         "only):\n" + few_shot
     )
@@ -200,6 +266,10 @@ def merge_and_validate(model_out, inp, assigned_id, costrules_text, samples_dir)
     if ("GetDescendants<" not in block or "violations.Add(Make(" not in block
             or ('"%s"' % assigned_id) not in block):
         raise ValueError("analyzerBlock does not match the required template / id")
+    target = re.search(r"GetDescendants<\s*([A-Za-z0-9_]+)\s*>", block)
+    if not target or target.group(1) not in NODE_TYPES:
+        raise ValueError("analyzerBlock targets an unknown Kusto.Language node type: %s"
+                         % (target.group(1) if target else "<none>"))
     if ('new("%s"' % assigned_id) in costrules_text:
         raise ValueError("id already present in CostRules.cs: " + assigned_id)
     c["signature"] = inp.get("signature", "")
