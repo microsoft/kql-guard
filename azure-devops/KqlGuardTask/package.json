@@ -5,6 +5,6 @@
   "description": "KqlGuard Azure Pipelines task runtime.",
   "main": "index.js",
   "dependencies": {
-    "azure-pipelines-task-lib": "^5.277.0"
+    "azure-pipelines-task-lib": "^5.278.0"
   }
 }
