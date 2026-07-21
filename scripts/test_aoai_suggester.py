@@ -212,6 +212,7 @@ check(_cap["headers"].get("authorization") == "Bearer tok-123",
 check("ep.openai.azure.com" in _cap["url"] and "gpt-4o" in _cap["url"]
       and "api-version=2024-10-21" in _cap["url"], "_call_aoai builds the URL from env")
 check(b'"json_schema"' in _cap["body"], "_call_aoai requests json_schema structured output")
+check(b'"temperature"' not in _cap["body"], "_call_aoai omits temperature (GPT-5/reasoning reject non-default)")
 check(_out["name"] == "UnboundedFacet", "_call_aoai extracts the model content dict")
 
 
