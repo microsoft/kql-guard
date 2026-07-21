@@ -53,6 +53,8 @@ public static class Rules
             "tolower()/toupper() around an equality defeats the index; use the case-insensitive '=~' operator instead.", "warning", 2),
         new("KQL013", "NonDeterministicTake",
             "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order so results are reproducible.", "warning", 1),
+        new("KQL014", "ManyComputedExtendColumns",
+            "Flags Extend operators that create many computed columns in one step, which can be costly.", "warning", 2),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -304,6 +306,7 @@ public static class CostAnalyzer
             }
         }
 
+        foreach (var x in root.GetDescendants<ExtendOperator>()) { if (x.GetDescendants<SimpleNamedExpression>().Count >= 6) { violations.Add(Make(code, filePath, x.TextStart, "KQL014", "'extend' defining many computed columns (>=6) can be expensive; consider breaking up work, materializing intermediate results, or projecting only the fields you need.")); } }
         return violations;
     }
 
