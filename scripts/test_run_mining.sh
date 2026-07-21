@@ -49,4 +49,42 @@ if grep -qi 'dotnet' <<<"$out"; then
   echo "FAIL: pipeline referenced dotnet with KQLGUARD_BIN set"; fails=$((fails+1))
 fi
 
+# --- Scenario 2: degrade-to-green when the suggester fails ---------------------
+# A recurring, unflagged, cost-bearing shape IS mined (so run-mining reaches the
+# suggester), but SUGGESTER_CMD exits nonzero. run-mining must log a skip line
+# and exit 0 (calibration already ran), NOT abort the job under set -e, and NOT
+# reach publish.
+recurring="$shimbin/kql-guard-recurring"
+cat > "$recurring" <<'PY'
+#!/usr/bin/env python3
+# Emit every corpus .kql under ONE signature with empty findings: mine.py groups
+# them into a single unflagged cluster with real cost (from the manifest) -> one
+# candidate -> run-mining calls the suggester.
+import glob, json, os, sys
+corpus = sys.argv[1]
+files = sorted(glob.glob(os.path.join(corpus, "**", "*.kql"), recursive=True))
+json.dump({"findings": [], "costScores": {f: 1 for f in files},
+           "shapes": {f: "RecurringUnflaggedShape;PipeExpression;" for f in files}},
+          sys.stdout)
+PY
+chmod +x "$recurring"
+
+out2=$(PATH="$shimbin" HOME="$emptyhome" GITHUB_STEP_SUMMARY=/dev/null \
+       KQLGUARD_BIN="$recurring" SUGGESTER_CMD=false \
+       "$shimbin/bash" scripts/run-mining.sh \
+         --corpus-path test/fixtures/mining/corpus \
+         --manifest    test/fixtures/mining/manifest.json 2>&1)
+rc2=$?
+
+if [[ $rc2 -eq 0 && "$out2" == *"suggester failed"* ]]; then
+  echo "ok: suggester nonzero -> degrade-to-green (rc=0, skip logged)"
+else
+  echo "FAIL: suggester failure did not degrade to green (rc=$rc2)"; echo "  out: $out2"
+  fails=$((fails+1))
+fi
+# Must not have reached validate/publish.
+if grep -qiE 'did not validate|publish|open .* PR' <<<"$out2"; then
+  echo "FAIL: reached validate/publish after a suggester failure"; fails=$((fails+1))
+fi
+
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi

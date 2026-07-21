@@ -67,3 +67,27 @@ variable "kuskus_database" {
   description = "ADX database holding QueryCompletion."
   default     = "Kuskus"
 }
+
+variable "aoai_model" {
+  type        = string
+  description = "Azure OpenAI model for the new-rule drafter. Approach A sends only public-safe masked signatures."
+  default     = "gpt-4o"
+}
+
+variable "aoai_model_version" {
+  type        = string
+  description = "Pinned model version for the deployment (avoids silent model drift)."
+  default     = "2024-08-06"
+}
+
+variable "aoai_deployment_capacity" {
+  type        = number
+  description = "Deployment capacity (thousands of TPM). The drafter fires at most once per mining run, so the floor is plenty."
+  default     = 10
+}
+
+variable "aoai_api_version" {
+  type        = string
+  description = "AOAI data-plane api-version the adapter calls. Must support json_schema structured outputs (>= 2024-08-01-preview; 2024-10-21 GA works)."
+  default     = "2024-10-21"
+}

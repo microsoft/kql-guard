@@ -47,6 +47,10 @@ jobs:
       GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
       GIT_COMMITTER_NAME: "github-actions[bot]"
       GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+      # Select the real Azure OpenAI drafter on the runner (KUSKUS_AOAI_* come
+      # from the runner .env; see infra/terraform). CI/self-tests never set this,
+      # so they keep scripts/mock-suggester.py — AOAI is called only here.
+      SUGGESTER_CMD: "python3 scripts/aoai-suggester.py"
     steps:
       - uses: actions/checkout@v4
 

@@ -60,6 +60,46 @@ resource "azurerm_role_assignment" "blob_contributor" {
   principal_id         = azurerm_user_assigned_identity.runner.principal_id
 }
 
+# --- Azure OpenAI: the new-rule drafter's model endpoint. Approach A transmits
+# ONLY the already-public masked shape signature (see scripts/suggest-rule.md),
+# so a standard public endpoint with default retention is acceptable — no
+# confidential data crosses the runner->model boundary.
+# ponytail: the confidential real-text upgrade (feeding real query Text) needs a
+# private endpoint + Zero-Data-Retention (Modified Abuse Monitoring). Provision
+# those here only when the adapter's stdin becomes real Text, not before.
+resource "azurerm_cognitive_account" "aoai" {
+  name                  = "${var.name_prefix}aoai${random_string.suffix.result}"
+  resource_group_name   = azurerm_resource_group.rg.name
+  location              = azurerm_resource_group.rg.location
+  kind                  = "OpenAI"
+  sku_name              = "S0"
+  custom_subdomain_name = "${var.name_prefix}aoai${random_string.suffix.result}" # required for Entra ID (MI) data-plane auth
+  local_auth_enabled    = false                                                  # MI-only; no account keys in the data path
+}
+
+resource "azurerm_cognitive_deployment" "drafter" {
+  name                 = var.aoai_model
+  cognitive_account_id = azurerm_cognitive_account.aoai.id
+
+  model {
+    format  = "OpenAI"
+    name    = var.aoai_model
+    version = var.aoai_model_version
+  }
+
+  sku {
+    name     = "Standard"
+    capacity = var.aoai_deployment_capacity
+  }
+}
+
+# Least-privilege: inference only (no author/manage) for the runner MI.
+resource "azurerm_role_assignment" "aoai_user" {
+  scope                = azurerm_cognitive_account.aoai.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = azurerm_user_assigned_identity.runner.principal_id
+}
+
 # --- Networking: egress-only. The runner polls GitHub outbound; nothing needs
 #     inbound, so the NSG denies all inbound and a Standard public IP gives
 #     guaranteed egress (cheaper than a NAT gateway for a single VM). ---
@@ -168,6 +208,9 @@ resource "azurerm_linux_virtual_machine" "runner" {
     kuskus_cluster           = var.kuskus_cluster
     kuskus_database          = var.kuskus_database
     mi_client_id             = azurerm_user_assigned_identity.runner.client_id
+    aoai_endpoint            = azurerm_cognitive_account.aoai.endpoint
+    aoai_deployment          = azurerm_cognitive_deployment.drafter.name
+    aoai_api_version         = var.aoai_api_version
     state_account            = azurerm_storage_account.state.name
     state_container          = azurerm_storage_container.kuskus_state.name
   }))

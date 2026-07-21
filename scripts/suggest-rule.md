@@ -42,9 +42,35 @@ and one assertion in `test/run-tests.sh`. The pipeline enforces this via
 suggester writes is trusted — it is validated (build + tests + over-report +
 leak-guard) before it can become a PR.
 
-## Deferred: real provider
+## Real provider: `scripts/aoai-suggester.py` (Azure OpenAI)
 
-`ponytail:` the real in-tenant Azure OpenAI wiring is deferred. Set
-`SUGGESTER_CMD` to a provider adapter that honors this same stdin/stdout
-contract; no other pipeline change is needed. The mock below makes the whole
-path runnable and testable today with zero external calls.
+The live drafter for the runner. Same stdin/stdout contract as above; the mock
+(`scripts/mock-suggester.py`) remains the default and the test double.
+
+- **Auth:** the runner MI, via IMDS (`urllib`, no `azure-identity`). Token scope
+  `https://cognitiveservices.azure.com`; `KUSKUS_MI_CLIENT_ID` selects the
+  user-assigned identity.
+- **Call:** `POST {KUSKUS_AOAI_ENDPOINT}/openai/deployments/{KUSKUS_AOAI_DEPLOYMENT}/chat/completions?api-version={KUSKUS_AOAI_API_VERSION}`
+  with `response_format: json_schema` (structured outputs). `urllib`, no `openai` SDK.
+- **Env:** `KUSKUS_AOAI_ENDPOINT`, `KUSKUS_AOAI_DEPLOYMENT`,
+  `KUSKUS_AOAI_API_VERSION` (from the runner `.env`, provisioned in
+  `infra/terraform`), `KUSKUS_MI_CLIENT_ID`.
+- **Id ownership:** the adapter computes the next free cost-band id from
+  `CostRules.cs` (`KQL0NN`, max+1) and injects it; the model never chooses the
+  id, so it cannot collide (root cause of the closed PR #38).
+- **Field ownership:** the model owns `name, shortDescription, level, weight,
+  message, analyzerBlock, sample, sampleSlug`; the adapter sets `id` and echoes
+  `signature, count, medianDurationMs`.
+- **Fail-closed:** any error (auth, network, malformed/invalid model output)
+  → stderr reason, nonzero exit, nothing on stdout. `run-mining.sh` degrades that
+  to a job-summary skip line (green); `validate-candidate.sh` is the second wall
+  (build + tests + over-report + leak-guard) before any branch is pushed.
+
+### Boundary & the real-text upgrade (not built)
+
+Approach A sends AOAI ONLY the masked shape signature, which is public-safe (it
+already appears in PR bodies). So a public endpoint with default retention is
+correct. The confidential upgrade feeds real query `Text` on stdin (a change to
+the mining input, not this adapter) and therefore requires a private endpoint +
+Zero-Data-Retention (Modified Abuse Monitoring); the contract, validate gate, and
+leak-guard are unchanged.
