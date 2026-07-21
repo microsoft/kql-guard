@@ -1,0 +1,10 @@
+// expensive extend with many computed columns
+SyntheticLogs
+| extend
+    col1 = tostring(parse_json(Payload).a),
+    col2 = tostring(parse_json(Payload).b),
+    col3 = tostring(parse_json(Payload).c),
+    col4 = tostring(parse_json(Payload).d),
+    col5 = tostring(parse_json(Payload).e),
+    col6 = tostring(parse_json(Payload).f)
+| project-away Payload
