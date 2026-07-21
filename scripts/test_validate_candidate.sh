@@ -46,5 +46,21 @@ PY
 out=$(run_validate VALIDATE_TESTS=true VALIDATE_BUILD=true -- --threshold 99 2>&1); rc=$?
 { [[ $rc -ne 0 && "$out" == *"leak-guard blocked"* ]] && echo "ok: leak-guard discards"; } || { echo "FAIL: leak gate ($rc): $out"; fails=$((fails+1)); }
 
+# Keep-candidate diagnostic: the leak-clean copy must be written ONLY after
+# leak-guard passes, so it stays safe once the drafter sees real query text.
+keep="$work/keep.json"
+# (a) leak-clean draft that fails tests -> the copy IS exposed (passed leak-guard).
+python3 scripts/mock-suggester.py <<<'{"signature":"A;facet;"}' > "$work/cand.json"
+rm -f "$keep"; run_validate KUSKUS_KEEP_CANDIDATE="$keep" VALIDATE_TESTS=false VALIDATE_BUILD=true -- --threshold 99 >/dev/null 2>&1
+{ [[ -f "$keep" ]] && echo "ok: keep-candidate exposes a leak-clean draft"; } || { echo "FAIL: keep-candidate not written when leak-clean"; fails=$((fails+1)); }
+# (b) leak-DIRTY draft -> the copy is WITHHELD (blocked before the keep write).
+python3 - "$work/cand.json" "$scratch/hit.kql" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1])); c["sample"] = open(sys.argv[2]).read()
+json.dump(c, open(sys.argv[1], "w"))
+PY
+rm -f "$keep"; run_validate KUSKUS_KEEP_CANDIDATE="$keep" VALIDATE_TESTS=true VALIDATE_BUILD=true -- --threshold 99 >/dev/null 2>&1
+{ [[ ! -f "$keep" ]] && echo "ok: keep-candidate withheld when leak-guard blocks"; } || { echo "FAIL: keep-candidate leaked a dirty draft"; fails=$((fails+1)); }
+
 rm -rf "$work"
 [[ $fails -eq 0 ]] && echo "validate-candidate self-check: PASS" || { echo "validate-candidate self-check: $fails FAILED"; exit 1; }
