@@ -85,30 +85,36 @@ NODE_TYPES = (
 # Inlined so the adapter has no parse dependency on the C# source.
 FEW_SHOT = [
     {
-        "name": "UnboundedSort",
+        "name": "UnboundedDistinct",
         "level": "warning",
         "weight": 2,
         "analyzerBlock": (
-            "        foreach (var sort in root.GetDescendants<SortOperator>())\n"
+            "        foreach (var x in root.GetDescendants<DistinctOperator>())\n"
             "        {\n"
-            "            violations.Add(Make(code, filePath, sort.TextStart, \"KQLNNN\",\n"
-            "                \"'sort' without a following 'take'/'top' orders the whole result; add a bound.\"));\n"
+            "            if (root.GetDescendants<TakeOperator>().Count == 0)\n"
+            "            {\n"
+            "                violations.Add(Make(code, filePath, x.TextStart, \"KQLNNN\",\n"
+            "                    \"'distinct' over an unbounded input scans every row; add a 'take'/'top' bound or pre-aggregate.\"));\n"
+            "            }\n"
             "        }\n"
         ),
-        "sample": "// unbounded sort\nSyntheticEvents\n| sort by StartTime desc\n",
+        "sample": "// unbounded distinct\nSyntheticEvents\n| distinct Category\n",
     },
     {
-        "name": "UnboundedMvExpand",
+        "name": "ExpensiveEvaluatePlugin",
         "level": "warning",
         "weight": 2,
         "analyzerBlock": (
-            "        foreach (var mv in root.GetDescendants<MvExpandOperator>())\n"
+            "        foreach (var x in root.GetDescendants<EvaluateOperator>())\n"
             "        {\n"
-            "            violations.Add(Make(code, filePath, mv.TextStart, \"KQLNNN\",\n"
-            "                \"'mv-expand' without 'limit' can explode row count; add a bound.\"));\n"
+            "            if (x.ToString().Contains(\"bag_unpack\", StringComparison.OrdinalIgnoreCase))\n"
+            "            {\n"
+            "                violations.Add(Make(code, filePath, x.TextStart, \"KQLNNN\",\n"
+            "                    \"'evaluate bag_unpack' materializes dynamic columns and can be expensive; project only the keys you need.\"));\n"
+            "            }\n"
             "        }\n"
         ),
-        "sample": "// unbounded mv-expand\nSyntheticEvents\n| mv-expand Tags\n",
+        "sample": "// expensive evaluate plugin\nSyntheticEvents\n| evaluate bag_unpack(Payload)\n",
     },
 ]
 
@@ -130,14 +136,24 @@ def build_messages(inp, assigned_id):
         "Hard constraints:\n"
         f"- The rule id is FIXED to {assigned_id}. Use it verbatim wherever an id "
         "appears (you do not choose it).\n"
-        "- analyzerBlock MUST be exactly one C# foreach of the form "
-        "`foreach (var x in root.GetDescendants<T>()) { "
-        "violations.Add(Make(code, filePath, x.TextStart, \"" + assigned_id +
-        "\", \"<message>\")); }`. T MUST be copied VERBATIM from the "
-        "ALLOWED_NODE_TYPES list below (never invent, abbreviate, or add a "
-        "suffix to a name — there is no 'InCsExpression'; the `in` operator is "
-        "'InExpression'). Choose the T matching the most expensive structural "
-        "feature of the shape.\n"
+        "- analyzerBlock MUST be one C# foreach over root.GetDescendants<T>() "
+        "that flags ONLY the expensive pattern through an `if` GUARD inside the "
+        "loop; it MUST NOT flag every match. The rule has to be SPECIFIC: it "
+        "must stay silent on ordinary, well-written queries and fire only on the "
+        "costly variant (an unconditional rule that flags every T is WRONG and "
+        "will be rejected). Form: `foreach (var x in root.GetDescendants<T>()) "
+        "{ if (<condition>) { violations.Add(Make(code, filePath, x.TextStart, "
+        "\"" + assigned_id + "\", \"<message>\")); } }`. Prefer a robust "
+        "condition that needs no deep API knowledge, e.g. "
+        "`x.ToString().Contains(\"<kql-keyword>\", "
+        "StringComparison.OrdinalIgnoreCase)` (optionally negated with !) or the "
+        "absence/presence of a bounding operator via "
+        "`root.GetDescendants<AllowedType>().Count == 0`.\n"
+        "- T (and any type you pass to GetDescendants<> in the condition) MUST "
+        "be copied VERBATIM from the ALLOWED_NODE_TYPES list below (never "
+        "invent, abbreviate, or add a suffix to a name — there is no "
+        "'InCsExpression'; the `in` operator is 'InExpression'). Choose the T "
+        "matching the most expensive structural feature of the shape.\n"
         "- sample MUST be synthetic KQL: invented table and column names, NO real "
         "identifiers or literal values, and it MUST trigger the rule.\n"
         "- sampleSlug MUST be kebab-case (lowercase letters, digits, hyphens).\n"

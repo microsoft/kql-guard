@@ -38,6 +38,28 @@ def main():
         rc2 = subprocess.call(["python3", os.path.join(HERE, "apply-candidate.py"), cj, "--root", work])
         assert rc2 == 0 and open(os.path.join(work, "CostRules.cs")).read().count(f'new("{cand["id"]}"') == 1, \
             "not idempotent"
+
+        # Regression: a new rule whose analyzerBlock opening line duplicates an
+        # existing rule's `foreach (var call in root.GetDescendants<...>())` must
+        # STILL get its detector inserted (idempotency keys on the whole block).
+        collide = {
+            "id": "KQL077", "name": "CollideFn", "shortDescription": "d",
+            "level": "warning", "weight": 1, "message": "m",
+            "analyzerBlock": (
+                "        foreach (var call in root.GetDescendants<FunctionCallExpression>())\n"
+                "        {\n"
+                "            if (call.ToString().Contains(\"zzz\", StringComparison.OrdinalIgnoreCase))\n"
+                "            {\n"
+                "                violations.Add(Make(code, filePath, call.TextStart, \"KQL077\", \"m\"));\n"
+                "            }\n"
+                "        }\n"),
+            "sample": "T | project x\n", "sampleSlug": "collide-fn-demo",
+            "signature": "s", "count": 1, "medianDurationMs": 1.0}
+        ccj = os.path.join(work, "collide.json")
+        json.dump(collide, open(ccj, "w"))
+        assert subprocess.call(["python3", os.path.join(HERE, "apply-candidate.py"), ccj, "--root", work]) == 0
+        assert 'call.TextStart, "KQL077"' in open(os.path.join(work, "CostRules.cs")).read(), \
+            "detector skipped when its opening line collides with an existing rule"
         print("ok: apply-candidate inserts rule into the four template files")
         return 0
     except AssertionError as e:

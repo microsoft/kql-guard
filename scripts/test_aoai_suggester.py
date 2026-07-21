@@ -73,6 +73,8 @@ _sys = sug.build_messages(INP, "KQL014")[0]["content"]
 check("ALLOWED_NODE_TYPES" in _sys and "InExpression" in _sys and "FacetOperator" in _sys,
       "build_messages injects the node-type allowlist")
 check("SomeOperator" not in _sys, "build_messages no longer offers a placeholder type name")
+check("SPECIFIC" in _sys and "if (" in _sys,
+      "build_messages tells the model to draft a specific, conditional rule")
 
 # --- merge_and_validate: happy path sets id + echoes aggregates ---
 with tempfile.TemporaryDirectory() as empty_samples:
