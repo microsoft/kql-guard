@@ -52,7 +52,7 @@ jobs:
       # so they keep scripts/mock-suggester.py — AOAI is called only here.
       SUGGESTER_CMD: "python3 scripts/aoai-suggester.py"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build kql-guard scanner from source
         run: |
