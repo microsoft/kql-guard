@@ -14,9 +14,10 @@ this adapter.
 
 Env:
   KUSKUS_AOAI_ENDPOINT     https://<name>.openai.azure.com
-  KUSKUS_AOAI_DEPLOYMENT   the deployment name (e.g. gpt-4o)
+  KUSKUS_AOAI_DEPLOYMENT   the deployment name (e.g. gpt-5-mini)
   KUSKUS_AOAI_API_VERSION  data-plane api-version; must support json_schema
-                           structured outputs (default 2024-10-21)
+                           structured outputs + the deployed model family
+                           (default 2025-04-01-preview)
   KUSKUS_MI_CLIENT_ID      user-assigned MI client id (optional; omit for the
                            VM's default identity)
 
@@ -26,11 +27,12 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 
 IMDS_TOKEN_URL = "http://169.254.169.254/metadata/identity/oauth2/token"
 AOAI_SCOPE = "https://cognitiveservices.azure.com"
-DEFAULT_API_VERSION = "2024-10-21"
+DEFAULT_API_VERSION = "2025-04-01-preview"
 LEVELS = {"warning", "error"}
 
 # Two existing rules as few-shot exemplars of the required analyzer-block shape
@@ -146,7 +148,8 @@ def _call_aoai(messages):
            f"?api-version={api}")
     body = json.dumps({
         "messages": messages,
-        "temperature": 0.2,
+        # ponytail: no temperature — the GPT-5/reasoning families reject a
+        # non-default temperature with a 400. Output is schema-constrained anyway.
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -160,8 +163,15 @@ def _call_aoai(messages):
         "Authorization": f"Bearer {_imds_token()}",
         "Content-Type": "application/json",
     })
-    with urllib.request.urlopen(req, timeout=60) as r:
-        raw = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = json.load(r)
+    except urllib.error.HTTPError as e:
+        # Surface Azure's actual complaint (unsupported param, api-version, role,
+        # ...) instead of a bare "HTTP Error 400". Still fail-closed: main()
+        # catches this, logs it, and the mining run skips the draft.
+        raise RuntimeError("AOAI %s: %s" % (
+            e.code, e.read().decode("utf-8", "replace")[:800])) from None
     msg = raw["choices"][0]["message"]
     if msg.get("refusal"):
         raise ValueError("model refused: " + str(msg["refusal"]))

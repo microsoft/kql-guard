@@ -88,7 +88,7 @@ resource "azurerm_cognitive_deployment" "drafter" {
   }
 
   sku {
-    name     = "Standard"
+    name     = var.aoai_deployment_sku
     capacity = var.aoai_deployment_capacity
   }
 }

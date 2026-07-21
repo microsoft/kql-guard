@@ -70,14 +70,17 @@ variable "kuskus_database" {
 
 variable "aoai_model" {
   type        = string
-  description = "Azure OpenAI model for the new-rule drafter. Approach A sends only public-safe masked signatures."
-  default     = "gpt-4o"
+  description = "Azure OpenAI model for the new-rule drafter. Approach A sends only public-safe masked signatures. Must be a GA chat model in the account's region (az cognitiveservices account list-models). The GPT-5 family is reasoning-only, so the adapter sends no temperature."
+  default     = "gpt-5-mini"
 }
 
+# ponytail: real-world knob — models retire. gpt-4o/gpt-4.1 all went Deprecating in
+# westeurope by 2026-07; the GPT-5 family is the GA chat option. Confirm before pinning:
+#   az cognitiveservices account list-models -n <acct> -g <rg> -o table
 variable "aoai_model_version" {
   type        = string
-  description = "Pinned model version for the deployment (avoids silent model drift)."
-  default     = "2024-08-06"
+  description = "Pinned model version for the deployment (avoids silent model drift). Must be a non-deprecated version deployable on aoai_deployment_sku in the account's region."
+  default     = "2025-08-07"
 }
 
 variable "aoai_deployment_capacity" {
@@ -86,8 +89,18 @@ variable "aoai_deployment_capacity" {
   default     = 10
 }
 
+# ponytail: real-world knob — docs list a SKU as "available" but the region's live
+# capacity can still 400. Regional "Standard" for gpt-4o is often unavailable in
+# westeurope; DataZoneStandard keeps data in the EU zone (right for the confidential
+# upgrade) and is more available. Flip to "GlobalStandard" if this is also constrained.
+variable "aoai_deployment_sku" {
+  type        = string
+  description = "AOAI deployment SKU. DataZoneStandard = EU-resident processing; GlobalStandard = broadest availability (routes globally); Standard = single-region (often capacity-constrained for gpt-4o)."
+  default     = "DataZoneStandard"
+}
+
 variable "aoai_api_version" {
   type        = string
-  description = "AOAI data-plane api-version the adapter calls. Must support json_schema structured outputs (>= 2024-08-01-preview; 2024-10-21 GA works)."
-  default     = "2024-10-21"
+  description = "AOAI data-plane api-version the adapter calls. Must support json_schema structured outputs AND the deployed model family (GPT-5 needs a 2025+ version). The adapter fails closed, so an unsupported value just skips the draft — bump it if a live run logs a call failure."
+  default     = "2025-04-01-preview"
 }
