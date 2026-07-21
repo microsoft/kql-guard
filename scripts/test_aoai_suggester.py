@@ -68,6 +68,12 @@ check(sug.next_free_id(FIX_RULES) == "KQL014", "next_free_id -> KQL014 (ignores 
 check(sug.next_free_id('new("KQL101", "X", "d", "error", 2),') == "KQL001",
       "next_free_id -> KQL001 when the cost band is empty")
 
+# --- build_messages injects the closed node-type allowlist into the system prompt ---
+_sys = sug.build_messages(INP, "KQL014")[0]["content"]
+check("ALLOWED_NODE_TYPES" in _sys and "InExpression" in _sys and "FacetOperator" in _sys,
+      "build_messages injects the node-type allowlist")
+check("SomeOperator" not in _sys, "build_messages no longer offers a placeholder type name")
+
 # --- merge_and_validate: happy path sets id + echoes aggregates ---
 with tempfile.TemporaryDirectory() as empty_samples:
     c = sug.merge_and_validate(good_model_out("KQL014"), INP, "KQL014", FIX_RULES, empty_samples)
@@ -108,6 +114,17 @@ with tempfile.TemporaryDirectory() as empty_samples:
         check(False, "non-template analyzerBlock is rejected")
     except ValueError:
         check(True, "non-template analyzerBlock is rejected")
+
+    # analyzerBlock targeting a hallucinated / non-vocabulary node type -> rejected
+    # (the model's observed failure mode: "InCsExpression" instead of "InExpression").
+    try:
+        halluc = good_model_out("KQL014")
+        halluc["analyzerBlock"] = halluc["analyzerBlock"].replace(
+            "FacetOperator", "InCsExpression")
+        sug.merge_and_validate(halluc, INP, "KQL014", FIX_RULES, empty_samples)
+        check(False, "analyzerBlock with an unknown node type is rejected")
+    except ValueError:
+        check(True, "analyzerBlock with an unknown node type is rejected")
 
 # --- sampleSlug that collides with an existing sample is rejected ---
 with tempfile.TemporaryDirectory() as samples:
