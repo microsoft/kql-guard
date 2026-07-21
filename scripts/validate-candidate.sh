@@ -40,6 +40,11 @@ if ! scripts/leak-guard.sh "$artifact" "$SCRATCH_ABS" >/dev/null 2>&1; then
 fi
 rm -f "$artifact"
 
+# Diagnostics: expose the leak-clean candidate so the workflow can upload it as
+# an artifact (to see why a draft failed the later gates). Written ONLY here —
+# AFTER leak-guard passes — so it stays safe once the drafter sees real text.
+[[ -n "${KUSKUS_KEEP_CANDIDATE:-}" ]] && cp "$CAND_ABS" "$KUSKUS_KEEP_CANDIDATE" || :
+
 # 2. Tests must pass. KUSKUS_IN_VALIDATE breaks the recursion when the worktree
 #    suite itself runs test_validate_candidate.sh.
 ( cd "$worktree" && KUSKUS_IN_VALIDATE=1 DOTNET="$DOTNET" $VALIDATE_TESTS ) >/dev/null 2>&1 \
