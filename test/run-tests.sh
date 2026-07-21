@@ -172,5 +172,7 @@ bash    scripts/test_publish_candidate.sh || fails=$((fails+1))
 
 assert_contains "KQL014 extend-many-computed-columns" "KQL014" "$(RUN $S/extend-many-computed-columns.kql)"
 
+assert_contains "KQL015 expensive-pack-unbounded" "KQL015" "$(RUN $S/expensive-pack-unbounded.kql)"
+
 echo "----"
 if [[ $fails -eq 0 ]]; then echo "ALL PASS"; exit 0; else echo "$fails FAILED"; exit 1; fi

@@ -55,6 +55,8 @@ public static class Rules
             "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order so results are reproducible.", "warning", 1),
         new("KQL014", "ManyComputedExtendColumns",
             "Flags Extend operators that create many computed columns in one step, which can be costly.", "warning", 2),
+        new("KQL015", "UnboundedPackProjection",
+            "Detects use of pack_all or bag_pack_columns inside a project without bounding the input, which can materialize many columns/rows.", "warning", 2),
     };
 
     private static readonly Dictionary<string, int> Index =
@@ -307,6 +309,18 @@ public static class CostAnalyzer
         }
 
         foreach (var x in root.GetDescendants<ExtendOperator>()) { if (x.GetDescendants<SimpleNamedExpression>().Count >= 6) { violations.Add(Make(code, filePath, x.TextStart, "KQL014", "'extend' defining many computed columns (>=6) can be expensive; consider breaking up work, materializing intermediate results, or projecting only the fields you need.")); } }
+        foreach (var x in root.GetDescendants<ProjectOperator>())
+        {
+            if ((x.ToString().Contains("pack_all", StringComparison.OrdinalIgnoreCase)
+                 || x.ToString().Contains("bag_pack_columns", StringComparison.OrdinalIgnoreCase))
+                && root.GetDescendants<TakeOperator>().Count == 0
+                && root.GetDescendants<TopOperator>().Count == 0)
+            {
+                violations.Add(Make(code, filePath, x.TextStart, "KQL015",
+                    "'pack_all' or 'bag_pack_columns' in a project can materialize many columns/rows; add a 'take'/'top' bound or pre-aggregate before packing."));
+            }
+        }
+
         return violations;
     }
 

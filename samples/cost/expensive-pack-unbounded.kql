@@ -1,0 +1,5 @@
+// expensive pack without bound
+SyntheticTable
+| where Level == "Error"
+| project Packed = pack_all(), Extra = bag_pack_columns(Payload, "colA", "colB")
+| extend FirstField = tostring(Packed.SomeKey)
