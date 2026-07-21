@@ -54,7 +54,7 @@ public static class Rules
         new("KQL013", "NonDeterministicTake",
             "'take'/'limit' without 'sort'/'top' returns arbitrary rows; add an order so results are reproducible.", "warning", 1),
         new("KQL014", "ManyComputedExtendColumns",
-            "Flags Extend operators that create many computed columns in one step, which can be costly.", "warning", 2),
+            "Flags Extend operators that create many computed columns in one step, which can be costly.", "warning", 3),
     };
 
     private static readonly Dictionary<string, int> Index =
