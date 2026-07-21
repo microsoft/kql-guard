@@ -48,7 +48,7 @@ public static class Rules
         new("KQL010", "CrossClusterQuery",
             "Cross-cluster/database reference (cluster()/database()) adds network egress and latency cost; keep queries cluster-local where possible.", "warning", 2),
         new("KQL011", "UnboundedSort",
-            "'sort'/'order by' with no following 'take'/'top' materializes and sorts the whole result; cap it with 'take N' or use 'top N'.", "warning", 2),
+            "'sort'/'order by' with no following 'take'/'top' materializes and sorts the whole result; cap it with 'take N' or use 'top N'.", "warning", 1),
         new("KQL012", "CaseFoldEquality",
             "tolower()/toupper() around an equality defeats the index; use the case-insensitive '=~' operator instead.", "warning", 2),
         new("KQL013", "NonDeterministicTake",
