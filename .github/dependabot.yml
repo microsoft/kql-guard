@@ -39,3 +39,5 @@ updates:
     groups:
       actions:
         update-types: [minor, patch]
+    cooldown:
+      default-days: 7
