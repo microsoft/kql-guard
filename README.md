@@ -149,7 +149,7 @@ The action installs the binary itself — no build step needed. Pick how via `mo
 |--------|--------------|
 | `download` *(default)* | Fetches the release asset for the runner (linux-x64/arm64, osx-arm64, win-x64). |
 | `docker` | Runs `ghcr.io/microsoft/kql-guard:<version>`. Use for runners without a release asset. |
-| `prebuilt` | Runs a locally-built binary (`bin/Release/...` or `prebuilt-path`). |
+| `prebuilt` | Runs a locally-built binary for the runner (`bin/Release/net10.0/<rid>/publish/kql-guard` or `prebuilt-path`). |
 
 **Inputs:** `mode`, `version` (release/image tag, default `latest`), `path`, `format`
 (`sarif`/`text`/`json`), `max-cost`, `schema`, `args` (raw passthrough),

@@ -44,7 +44,7 @@ inputs:
     required: false
     default: "false"
   prebuilt-path:
-    description: "prebuilt mode only: path to the locally-built binary. Defaults to bin/Release/net10.0/<rid>/publish/kql-guard."
+    description: "prebuilt mode only: path to the locally-built binary. Defaults to the runner's published RID under bin/Release/net10.0/<rid>/publish."
     required: false
     default: ""
 
@@ -124,10 +124,18 @@ runs:
           prebuilt)
             BINARY="${{ inputs.prebuilt-path }}"
             if [[ -z "$BINARY" ]]; then
-              BINARY="bin/Release/net10.0/linux-x64/publish/kql-guard"
+              case "${{ runner.os }}/${{ runner.arch }}" in
+                Linux/X64)     BINARY="bin/Release/net10.0/linux-x64/publish/kql-guard" ;;
+                Linux/ARM64)   BINARY="bin/Release/net10.0/linux-arm64/publish/kql-guard" ;;
+                macOS/ARM64)   BINARY="bin/Release/net10.0/osx-arm64/publish/kql-guard" ;;
+                Windows/X64)   BINARY="bin/Release/net10.0/win-x64/publish/kql-guard.exe" ;;
+                *)
+                  echo "::error::Unsupported runner ${{ runner.os }}/${{ runner.arch }} for mode: prebuilt. Set prebuilt-path explicitly or use mode: docker."
+                  exit 1 ;;
+              esac
             fi
             if [[ ! -x "$BINARY" ]]; then
-              echo "::error::kql-guard binary not found at $BINARY. Build it first (dotnet publish -c Release -r linux-x64) or use mode: download."
+              echo "::error::kql-guard binary not found at $BINARY. Build it first with the runner's RID or set prebuilt-path explicitly."
               exit 1
             fi
             run_capture "$BINARY" "${ARGS[@]}" || EXIT_CODE=$?
