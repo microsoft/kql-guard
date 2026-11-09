@@ -123,6 +123,14 @@ rm -f "$szf"
 # Sentinel YAML: extract embedded query and map findings to the YAML's own rows.
 assert_contains "yaml KQL002 line 6" "sentinel-rule.yaml(6," "$(RUN samples/sentinel-rule.yaml)"
 
+# YAML block-scalar chomping indicators are valid query headers.
+for indicator in "|-" "|+" ">-" ">+"; do
+  yaml=$(mktemp --suffix=.yaml)
+  printf 'query: %s\n  SecurityEvent | where EventID contains "x"\n' "$indicator" > "$yaml"
+  assert_contains "yaml query $indicator" "KQL002" "$(RUN "$yaml")"
+  rm -f "$yaml"
+done
+
 # Baseline: record current findings, then a clean rescan reports none.
 bl=$(mktemp); RUN $S/unwindowed-join.kql --write-baseline --baseline "$bl" >/dev/null
 out=$(RUN $S/unwindowed-join.kql --baseline "$bl")

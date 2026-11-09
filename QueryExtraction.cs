@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace KqlGuard;
 
@@ -24,7 +25,7 @@ public static class QueryExtraction
         for (int i = 0; i < lines.Length; i++)
         {
             var t = lines[i].TrimStart();
-            if (!(t.StartsWith("query:") && t.TrimEnd().EndsWith("|") || t.StartsWith("query:") && t.TrimEnd().EndsWith(">")))
+            if (!IsQueryBlockHeader(t))
                 continue;
 
             int indent = lines[i].Length - t.Length;
@@ -41,5 +42,13 @@ public static class QueryExtraction
             return (string.Join("\n", body.Select(b => b.Length >= strip ? b[strip..] : b)), i + 1);
         }
         return ("", 0); // no query block: nothing to lint
+    }
+
+    private static bool IsQueryBlockHeader(string line)
+    {
+        return Regex.IsMatch(
+            line,
+            @"^query:\s*[|>](?:(?:[1-9][+-]?)|(?:[+-][1-9]?))?(?:\s+#.*)?$",
+            RegexOptions.CultureInvariant);
     }
 }
